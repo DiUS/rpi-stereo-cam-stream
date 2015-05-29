@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pi Cam Stream</title>
+    <link href="/static/bootstrap.min.css" rel="stylesheet">
+    <style type="text/css">
+      #stream {
+        width: 100%;
+        height: 100%;
+        margin: 0px auto;
+        display: block;
+      }
+    </style>
+    <script src="/static/jquery-2.1.1.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io();
+      socket.on('liveStream', function(url) {
+        $('#stream').attr('src', url);
+      });
+      socket.emit('start-stream');
+    </script>
+  </head>
+  <body>
+    <h1 class="text-center">
+      Pi Camera Live Stream <small>Powered by PI</small>
+    </h1>
+    <div>
+      <img src="" id="stream">
+    </div>
+  </body>
+</html>
