@@ -4,6 +4,8 @@ Raspberry Pi Stereo Camera Live Stream
 Stereo camera mode requires Raspberry Pi Compute Module as it exposes both CSI ports.
 
 ### Set up Stereo Camera:
+This section is based on the Raspberry Pi Foundation cmio-camera instructions from https://www.raspberrypi.org/documentation/hardware/computemodule/cmio-camera.md
+Image below copied from Raspberry Pi Foundation.
 ![Image of Camera connection](https://github.com/jasaw/rpi-stereo-cam-stream/blob/master/docs/CMAIO-Cam-Adapter.jpg)
 
 Connect jumper wires:
