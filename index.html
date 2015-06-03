@@ -13,6 +13,9 @@
         margin: 0px auto;
         display: block;
       }
+      .form-inline {
+        text-align: center;
+      }
     </style>
     <script src="/static/jquery-2.1.1.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -22,12 +25,40 @@
         $('#stream').attr('src', url);
       });
       socket.emit('start-stream');
+      $(function(){
+        $('#submit').click(function(e){
+          e.preventDefault();
+          var data = {};
+          data.ISO = $('#iso').val();
+          data.ss = $('#shutter').val();
+          $.ajax({
+            type: 'POST',
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            url: '/update',
+            cache: false,
+          });
+        });
+      });
     </script>
   </head>
   <body>
-    <h1 class="text-center">
-      Pi Camera Live Stream <small>Powered by PI</small>
-    </h1>
+    <div class="container">
+      <h1 class="text-center">
+        Pi Camera Live Stream <small>Powered by PI</small>
+      </h1>
+      <form class="form-inline">
+        <div class="form-group">
+          <label for="iso">ISO</label>
+          <input type="text" id="iso" value="100" class="form-control">
+        </div>
+        <div class="form-group">
+          <label for="shutter">Shutter speed</label>
+          <input type="text" id="shutter" value="800" class="form-control">
+        </div>
+        <button id="submit" class="btn btn-default">Submit</button>
+      </form>
+    </div>
     <div>
       <img src="" id="stream">
     </div>
