@@ -17,6 +17,7 @@ var raspistill_args = {
     "-awbg": "1,1",
     "-q"   : 100,
     "-th"  : "none",
+    "-bm"  : null,
     "-n"   : null,
     "-w"   : 5184,
     "-h"   : 1944,
