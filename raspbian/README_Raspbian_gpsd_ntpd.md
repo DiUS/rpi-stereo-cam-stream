@@ -1,7 +1,7 @@
 # Enabling UART based GPS receiver and getting ntpd to sync from it
 
 The UART based GPS receiver referenced in this guide is the [PA6H (MTK3339) GPS module](http://www.adafruit.com/products/790). There is a [breakout module](http://www.adafruit.com/product/746) version for development.
-The built-in antenna is quite weak and may have difficulty getting a GPS lock. I highly recommend getting an [active antenna](http://www.adafruit.com/product/960) and the [adapter](http://www.adafruit.com/product/851) to ease indoor testing.
+The built-in antenna is quite weak and may have difficulty getting a GPS lock indoor. I highly recommend getting an [active antenna](http://www.adafruit.com/product/960) and the [adapter](http://www.adafruit.com/product/851) to ease indoor testing.
 
 ### Disable UART from raspi-config
 ```
