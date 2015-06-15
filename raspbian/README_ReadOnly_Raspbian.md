@@ -146,3 +146,15 @@ remountrootrw
 rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/groff/* /usr/share/info/* /var_org/cache/man/* /usr/share/lintian/*
 find /usr/share/locale/* -maxdepth 0 -type d |grep -v en |xargs rm -rf
 ```
+
+### Use fake-hwclock to set default system time
+```
+rwchroot.sh
+apt-get install fake-hwclock
+date -s "2015-06-15 12:00"
+fake-hwclock save
+```
+
+To adjust the time in fake hwclock, edit /etc/fake-hwclock.data.
+
+Add "service fake-hwclock start" to /etc/rc.local to restore a default system time.

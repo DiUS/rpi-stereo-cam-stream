@@ -63,5 +63,7 @@ iptables -t nat -A OUTPUT -d localhost -p tcp --dport 80 -j REDIRECT --to-port 3
 Point your web browser to http://rpi
 
 ### Tuning virtual memory (optional)
+```
 echo 300 > /proc/sys/vm/dirty_writeback_centisecs
 echo 500 > /proc/sys/vm/dirty_expire_centisecs
+```

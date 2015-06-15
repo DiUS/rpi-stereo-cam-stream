@@ -1,9 +1,9 @@
 # Enabling UART based GPS receiver and getting ntpd to sync from it
 
-The UART based GPS receiver referenced in this guide is the [PA6H (MTK3339) GPS module][http://www.adafruit.com/products/790]. There is a [breakout module][http://www.adafruit.com/product/746] version for development.
-The built-in antenna is quite weak and may have difficulty getting a GPS lock. I highly recommend getting an [active antenna][http://www.adafruit.com/product/960] and the [adapter][http://www.adafruit.com/product/851] to ease indoor testing.
+The UART based GPS receiver referenced in this guide is the [PA6H (MTK3339) GPS module](http://www.adafruit.com/products/790). There is a [breakout module](http://www.adafruit.com/product/746) version for development.
+The built-in antenna is quite weak and may have difficulty getting a GPS lock. I highly recommend getting an [active antenna](http://www.adafruit.com/product/960) and the [adapter](http://www.adafruit.com/product/851) to ease indoor testing.
 
-### disable UART from raspi-config
+### Disable UART from raspi-config
 ```
 raspi-config
 ```
@@ -30,15 +30,18 @@ dpkg-reconfigure gpsd
 ```
 
 A dialog will appear with some questions that should be answered as follows:
-
+```
 Start gpsd automatically on boot? Yes
 Device the GPS receiver is attached to: /dev/ttyAMA0
 Should gpsd handle attached USB GPS receivers automatically? No
 Options to gpsd: -b -n
+```
 
 Explanation of the two options:
+```
 -b - Broken-device-safety, aka read-only mode. This option prevents gpsd from writing anything to the device. In this case it is used to prevent it from shortening the pulse length of the LVC model from its default of 200 ms to a mere 40 ms.
 -n - Forces the clock to be updated even though no clients are active. By default, gpsd stops polling the GPS device when clients are no longer connected, and ntpd is not recognized as a client.
+```
 
 Afterwards, these settings are saved in /etc/default/gpsd and the daemon is started automatically.
 
@@ -47,8 +50,11 @@ Afterwards, these settings are saved in /etc/default/gpsd and the daemon is star
 `gpsmon`
 
 ### Enable PPS input
-Non-device-tree: Add "bcm2708.pps_gpio_pin=18" to /boot/cmdline.txt.
-Device-tree: Add "dtoverlay=pps-gpio,gpiopin=18" to /boot/config.txt.
+Non-device-tree:
+`Add "bcm2708.pps_gpio_pin=18" to /boot/cmdline.txt.`
+
+Device-tree:
+`Add "dtoverlay=pps-gpio,gpiopin=18" to /boot/config.txt.`
 
 Add "pps-gpio" to /etc/modules.
 
@@ -65,7 +71,9 @@ Reboot and check PPS input.
 trying PPS source "/dev/pps0"
 found PPS source "/dev/pps0"
 ok, found 1 source(s), now start fetching data...
-
+source 0 - assert 1434346829.999683388, sequence: 515 - clear  0.000000000, sequence: 0
+source 0 - assert 1434346830.999689338, sequence: 516 - clear  0.000000000, sequence: 0
+source 0 - assert 1434346831.999685340, sequence: 517 - clear  0.000000000, sequence: 0
 ```
 
 ### Sync NTP with PPS
@@ -101,5 +109,19 @@ Remove cached NTP config.
 Reboot and check NTP
 ```
 # ntpq -p -crv
-
+     remote           refid      st t when poll reach   delay   offset  jitter
+==============================================================================
+oPPS(0)          .PPS.            0 l   11   16  377    0.000    0.311   0.024
+*SHM(0)          .GPS.            0 l   14   16  377    0.000  -347.04  11.301
+ ntp.2000cn.com. .INIT.          16 u    -   64    0    0.000    0.000   0.000
++cachens2.onqnet 3.251.78.77      4 u   24   64  177   51.776   -9.594  63.452
+ dns2-ha.au.syra .INIT.          16 u    -   64    0    0.000    0.000   0.000
+associd=0 status=0118 leap_none, sync_pps, 1 event, no_sys_peer,
+version="ntpd 4.2.8p2@1.3265-o Fri Jun 12 06:57:46 UTC 2015 (1)",
+processor="armv6l", system="Linux/3.18.11+", leap=00, stratum=1,
+precision=-18, rootdelay=0.000, rootdisp=1.165, refid=PPS,
+reftime=d928e3de.fa349fa8  Mon, Jun 15 2015 15:40:46.977,
+clock=d928e3ea.3ec4f256  Mon, Jun 15 2015 15:40:58.245, peer=13240, tc=4,
+mintc=3, offset=0.311032, frequency=-20.862, sys_jitter=0.023969,
+clk_jitter=0.117, clk_wander=0.153
 ```
