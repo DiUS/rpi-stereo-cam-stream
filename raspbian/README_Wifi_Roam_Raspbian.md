@@ -1,6 +1,6 @@
 # How to set up wifi roaming and hotplug ethernet
 
-Edit /etc/network/interfaces:
+### Edit /etc/network/interfaces:
 ```
 auto lo
 iface lo inet loopback
@@ -16,7 +16,7 @@ iface wlan0 inet manual
 iface default inet dhcp
 ```
 
-Configure roaming:
+### Configure roaming:
 ```
 cat > /etc/wpa_supplicant/wpa-roam.conf << EOF
 ctrl_interface=/var/run/wpa_supplicant
