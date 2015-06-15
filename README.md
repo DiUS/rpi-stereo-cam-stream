@@ -51,4 +51,17 @@ tar xzf node-v0.10.17-linux-arm-pi.tar.gz --directory /opt
 ### Running the stream server on the Pi:
 `/opt/node-v0.10.17-linux-arm-pi/bin/node index.js`
 
-The web server listens on port 3000. Point your web browser to http://rpi:3000
+The web server listens on port 3000. Edit /etc/rc.local to forward port 80 to port 3000.
+```
+# Allow HTTP traffic
+iptables -A INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
+# Camera streamer listens on port 3000, forward port 80 there.
+iptables -t nat -A PREROUTING --src 0/0 -p tcp --dport 80 -j REDIRECT --to-port 3000
+iptables -t nat -A OUTPUT -d localhost -p tcp --dport 80 -j REDIRECT --to-port 3000
+```
+
+Point your web browser to http://rpi
+
+### Tuning virtual memory (optional)
+echo 300 > /proc/sys/vm/dirty_writeback_centisecs
+echo 500 > /proc/sys/vm/dirty_expire_centisecs
