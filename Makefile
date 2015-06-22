@@ -35,6 +35,8 @@ package: init
 	cp -f raspbian/raspistill.gpsd $(PACKAGE_NAME)/target/opt/vs/bin/raspistill.gpsd
 	mkdir -p $(PACKAGE_NAME)/target/boot
 	cp -f device-tree/dt-blob-dualcam-pin4pin5.dtb $(PACKAGE_NAME)/target/boot/dt-blob.bin
+	cp index.js         $(PACKAGE_NAME)
+	cp index.html       $(PACKAGE_NAME)
 	cp package.json     $(PACKAGE_NAME)
 	cp README.md        $(PACKAGE_NAME)
 	tar czf $(PACKAGE_NAME).tar.gz $(PACKAGE_NAME)
