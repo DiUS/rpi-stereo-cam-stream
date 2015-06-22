@@ -1,0 +1,51 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          rpi-stereo-cam-stream
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: RPi stereo camera streamer
+# Description:       Streams stereo images to web browser.
+### END INIT INFO
+
+# Author: Joo Aun Saw
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+DESC="RPi stereo camera streamer"
+NAME=rpi-stereo-cam-stream
+NODE=/opt/node-v0.10.17-linux-arm-pi/bin/node
+DAEMON_DIR=/opt/rpi-stereo-cam-stream
+DAEMON=index.js
+PIDFILE=/var/run/rpi-stereo-cam-stream.pid
+SCRIPTNAME=/etc/init.d/"$NAME"
+
+test -f $DAEMON_DIR/$DAEMON || exit 0
+
+. /lib/lsb/init-functions
+
+case "$1" in
+start)	log_daemon_msg "Starting rpi stereo camera streamer" $NAME
+        cd $DAEMON_DIR
+        start-stop-daemon --start --background --quiet --oknodo --chdir $DAEMON_DIR --make-pidfile --pidfile $PIDFILE --startas $NODE -- $DAEMON
+        log_end_msg $?
+	;;
+stop)	log_daemon_msg "Stopping rpi stereo camera streamer" $NAME
+        killproc -p $PIDFILE $NODE
+        RETVAL=$?
+        [ $RETVAL -eq 0 ] && [ -e "$PIDFILE" ] && rm -f $PIDFILE
+        log_end_msg $RETVAL
+        ;;
+restart|reload|force-reload) log_daemon_msg "Restarting rpi stereo camera streamer" $NAME
+        $0 stop
+        $0 start
+        ;;
+status)
+        status_of_proc -p $PIDFILE $DAEMON $NAME && exit 0 || exit $?
+        ;;
+*)	log_action_msg "Usage: /etc/init.d/rpi-stereo-cam-stream {start|stop|status|restart|reload|force-reload}"
+        exit 2
+        ;;
+esac
+exit 0
+
