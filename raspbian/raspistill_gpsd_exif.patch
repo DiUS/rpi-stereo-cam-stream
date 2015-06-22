@@ -1,11 +1,11 @@
-commit 6218045d2cfa5401fedce5318c942592a0e32b12
+commit 03aa0e5e4821ca1dba16ce1c38a9fa46afe1e4af
 Author: Joo Aun Saw <jasaw@dius.com.au>
-Date:   Fri Jun 19 17:48:10 2015 +1000
+Date:   Mon Jun 22 20:12:57 2015 +1000
 
-    read GPS info from gpsd and add GPS EXIF (requires libgps)
+    Apply GPS info from gpsd as EXIF tags (requires libgps)
 
 diff --git a/host_applications/linux/apps/raspicam/CMakeLists.txt b/host_applications/linux/apps/raspicam/CMakeLists.txt
-index f00cef9..444edfb 100644
+index f00cef9..10d9799 100644
 --- a/host_applications/linux/apps/raspicam/CMakeLists.txt
 +++ b/host_applications/linux/apps/raspicam/CMakeLists.txt
 @@ -26,7 +26,7 @@ add_executable(raspividyuv  ${COMMON_SOURCES} RaspiVidYUV.c)
@@ -13,7 +13,7 @@ index f00cef9..444edfb 100644
  set (MMAL_LIBS mmal_core mmal_util mmal_vc_client)
  
 -target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host GLESv2 EGL m)
-+target_link_libraries(raspistill ${MMAL_LIBS} gps vcos bcm_host GLESv2 EGL m)
++target_link_libraries(raspistill ${MMAL_LIBS} vcos bcm_host GLESv2 EGL m gps)
  target_link_libraries(raspiyuv   ${MMAL_LIBS} vcos bcm_host)
  target_link_libraries(raspivid   ${MMAL_LIBS} vcos bcm_host)
  target_link_libraries(raspividyuv   ${MMAL_LIBS} vcos bcm_host)
@@ -30,7 +30,7 @@ index ca1853c..23e29d8 100644
  include ../Makefile.include
  
 diff --git a/host_applications/linux/apps/raspicam/RaspiStill.c b/host_applications/linux/apps/raspicam/RaspiStill.c
-index 3b26810..ab03d0e 100644
+index 3b26810..71299b1 100644
 --- a/host_applications/linux/apps/raspicam/RaspiStill.c
 +++ b/host_applications/linux/apps/raspicam/RaspiStill.c
 @@ -56,6 +56,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -82,11 +82,11 @@ index 3b26810..ab03d0e 100644
     { CommandSensorMode,"-mode",     "md", "Force sensor mode. 0=auto. See docs for other modes available", 1},
     { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
     { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
-+   { CommandExifGpsd,  "-gpsd",     "gps", "Add gpsd information to EXIF", 0},
++   { CommandExifGpsd,  "-gpsd",     "gps", "Apply GPS information from gpsd as EXIF tags", 0},
  };
  
  static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
-@@ -256,6 +267,80 @@ static struct
+@@ -256,6 +267,78 @@ static struct
  
  static int next_frame_description_size = sizeof(next_frame_description) / sizeof(next_frame_description[0]);
  
@@ -138,7 +138,6 @@ index 3b26810..ab03d0e 100644
 +static int deg_to_str(double f, char *buf, int buf_size)
 +{
 +   int sec, deg, min;
-+   //int dsec;
 +   long frac_deg;
 +   double fdsec, fsec, fdeg, fmin;
 +
@@ -158,7 +157,6 @@ index 3b26810..ab03d0e 100644
 +
 +   fdsec = modf(fsec * 60, &fsec);
 +   sec = (int)fsec;
-+   //dsec = (int)(fdsec * 1000.0);
 +   snprintf(buf, buf_size, "%02d/1,%02d/1,%02d/1", deg, min, sec);
 +
 +   return 0;
@@ -167,7 +165,7 @@ index 3b26810..ab03d0e 100644
  /**
   * Assign a default set of parameters to the state passed in
   *
-@@ -302,6 +387,7 @@ static void default_status(RASPISTILL_STATE *state)
+@@ -302,6 +385,7 @@ static void default_status(RASPISTILL_STATE *state)
     state->sensor_mode = 0;
     state->datetime = 0;
     state->timestamp = 0;
@@ -175,7 +173,7 @@ index 3b26810..ab03d0e 100644
  
     // Setup preview window defaults
     raspipreview_set_defaults(&state->preview_parameters);
-@@ -624,6 +710,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
+@@ -624,6 +708,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
           state->settings = 1;
           break;
  
@@ -186,7 +184,7 @@ index 3b26810..ab03d0e 100644
           
        case CommandCamSelect:  //Select camera input port
        {
-@@ -1314,6 +1404,83 @@ static void add_exif_tags(RASPISTILL_STATE *state)
+@@ -1314,6 +1402,83 @@ static void add_exif_tags(RASPISTILL_STATE *state)
     snprintf(exif_buf, sizeof(exif_buf), "IFD0.DateTime=%s", time_buf);
     add_exif_tag(state, exif_buf);
  
@@ -270,7 +268,7 @@ index 3b26810..ab03d0e 100644
     // Now send any user supplied tags
  
     for (i=0;i<state->numExifTags && i < MAX_USER_EXIF_TAGS;i++)
-@@ -1690,6 +1857,14 @@ int main(int argc, const char **argv)
+@@ -1690,6 +1855,14 @@ int main(int argc, const char **argv)
        dump_status(&state);
     }
  
@@ -285,7 +283,7 @@ index 3b26810..ab03d0e 100644
     if (state.useGL)
        raspitex_init(&state.raspitex_state);
  
-@@ -1798,7 +1973,12 @@ int main(int argc, const char **argv)
+@@ -1798,7 +1971,12 @@ int main(int argc, const char **argv)
  
              while (keep_looping)
              {
@@ -298,7 +296,7 @@ index 3b26810..ab03d0e 100644
  
                  if (state.datetime)
                  {
-@@ -2022,6 +2202,18 @@ error:
+@@ -2022,6 +2200,18 @@ error:
           fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
     }
  

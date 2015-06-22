@@ -23,6 +23,7 @@ var raspistill_args = {
   "awbg": "1,1",
   "q"   : 100,
   "th"  : "none",
+  "gps" : null,
   "bm"  : null,
   "n"   : null,
   "w"   : 5184,
