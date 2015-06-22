@@ -15,26 +15,26 @@ var stream_dir = '/tmp/';
 var capture_dir = '/storage/photos/';
 var pollInterval = 5000;
 var raspistill_args = {
-    "tl"  : 1000,
-    "t"   : 0,
-    "ISO" : 100,
-    "ss"  : 800,
-    "awb" : "off",
-    "awbg": "1,1",
-    "q"   : 100,
-    "th"  : "none",
-    "bm"  : null,
-    "n"   : null,
-    "w"   : 5184,
-    "h"   : 1944,
-    "3d"  : "sbs"
-  };
+  "tl"  : 1000,
+  "t"   : 0,
+  "ISO" : 100,
+  "ss"  : 800,
+  "awb" : "off",
+  "awbg": "1,1",
+  "q"   : 100,
+  "th"  : "none",
+  "bm"  : null,
+  "n"   : null,
+  "w"   : 5184,
+  "h"   : 1944,
+  "3d"  : "sbs"
+};
 var stream_args = {
-    "o"   : stream_dir + "image_stream.jpg"
+  "o"   : stream_dir + "image_stream.jpg"
 };
 var capture_args = {
-    "ts"  : null,
-    "o"   : capture_dir + "image_%d.jpg"
+  "ts"  : null,
+  "o"   : capture_dir + "image_%d.jpg"
 };
 
 
