@@ -5,6 +5,7 @@ var io = require('socket.io')(http);
 var fs = require('fs');
 var path = require('path');
 var spawn = require('child_process').spawn;
+var exec = require('child_process').exec;
 var bodyParser = require('body-parser');
 
 var proc;
@@ -12,7 +13,8 @@ var pollTimer;
 var mode = 'test';
 var prevModTime;
 var stream_dir = '/tmp/';
-var capture_dir = '/storage/photos/';
+var capture_partition = '/storage';
+var capture_dir = capture_partition + '/photos/';
 var pollInterval = 5000;
 var raspistill_args = {
   "tl"  : 1000,
@@ -127,6 +129,10 @@ io.on('connection', function(socket) {
     if (app.get('pollDir'))
       start_stop_capture(data);
   });
+  socket.on('images', function(data) {
+    if (data === 'ls')
+      listImages();
+  });
 });
 
 
@@ -140,27 +146,31 @@ function emit_latest_image() {
   emit_cam_config();
   if (mode === 'test') {
     fs.readdir(stream_dir, function(err, files) {
-      var latest = files.filter(function(file) { return file === 'image_stream.jpg'; }).shift();
-      if (latest) {
-        var currModTime = fs.statSync(stream_dir + latest).mtime.getTime();
-        if (currModTime != prevModTime) {
-          prevModTime = currModTime;
-          io.sockets.emit('liveStream', 'stream/'+latest+'?_t=' + (Math.random() * 100000));
+      if (!err) {
+        var latest = files.filter(function(file) { return file === 'image_stream.jpg'; }).shift();
+        if (latest) {
+          var currModTime = fs.statSync(stream_dir + latest).mtime.getTime();
+          if (currModTime != prevModTime) {
+            prevModTime = currModTime;
+            io.sockets.emit('liveStream', 'stream/'+latest+'?_t=' + (Math.random() * 100000));
+          }
         }
       }
     });
   } else if (mode === 'capture') {
     fs.readdir(capture_dir, function(err, files) {
-      var latest = files.filter(function(file) { return file.substr(-4) === '.jpg'; })
-                    .sort(function(a, b) {
-                     return fs.statSync(capture_dir + b).mtime.getTime() -
-                            fs.statSync(capture_dir + a).mtime.getTime();
-                   }).shift();
-      if (latest) {
-        var currModTime = fs.statSync(capture_dir + latest).mtime.getTime();
-        if (currModTime != prevModTime) {
-          prevModTime = currModTime;
-          io.sockets.emit('liveStream', 'capture/'+latest+'?_t=' + (Math.random() * 100000));
+      if (!err) {
+        var latest = files.filter(function(file) { return file.substr(-4) === '.jpg'; })
+                      .sort(function(a, b) {
+                       return fs.statSync(capture_dir + b).mtime.getTime() -
+                              fs.statSync(capture_dir + a).mtime.getTime();
+                     }).shift();
+        if (latest) {
+          var currModTime = fs.statSync(capture_dir + latest).mtime.getTime();
+          if (currModTime != prevModTime) {
+            prevModTime = currModTime;
+            io.sockets.emit('liveStream', 'capture/'+latest+'?_t=' + (Math.random() * 100000));
+          }
         }
       }
     });
@@ -225,6 +235,59 @@ function start_stop_capture(action) {
     mode = 'test';
   }
   emit_mode();
+}
+
+
+function diskfree(drive, callback) {
+  var total = 0;
+  var free = 0;
+  var status = null;
+  exec("df -k '" + drive.replace(/'/g,"'\\''") + "'", function(error, stdout, stderr) {
+    if (error) {
+      if (stderr.indexOf("No such file or directory") != -1) {
+        status = 'NOTFOUND';
+      } else {
+        status = 'STDERR';
+      }
+      callback ? callback(error, total, free, status)
+      : console.error(stderr);
+    } else {
+      var lines = stdout.trim().split("\n");
+      var str_disk_info = lines[lines.length - 1].replace( /[\s\n\r]+/g,' ');
+      var disk_info = str_disk_info.split(' ');
+      total = disk_info[1] * 1024;
+      free = disk_info[3] * 1024;
+      status = 'READY';
+      callback && callback(null, total, free, status);
+    }
+  });
+}
+
+
+function listImages() {
+  fs.readdir(capture_dir, function(err, files) {
+    if (!err) {
+      var images = files.filter(function(file) { return file.substr(-4) === '.jpg'; })
+                   .sort(function(a, b) {
+                    return fs.statSync(capture_dir + b).mtime.getTime() -
+                           fs.statSync(capture_dir + a).mtime.getTime();
+                   });
+      if (images) {
+        var image_list = {};
+        image_list.dir = 'capture';
+        image_list.images = images;
+        io.sockets.emit('image-list', image_list);
+      }
+    }
+  });
+  diskfree(capture_partition, function (error, total, free, status) {
+    if (!error) {
+      var diskinfo = {};
+      diskinfo.total = total;
+      diskinfo.free = free;
+      io.sockets.emit('diskinfo', diskinfo);
+    }
+  });
 }
 
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pi Cam Stream</title>
+    <title>RPi Stereo Cam Stream</title>
     <link href="/static/bootstrap.min.css" rel="stylesheet">
     <style type="text/css">
       #stream {
@@ -18,6 +18,7 @@
       }
     </style>
     <script src="/static/jquery-2.1.1.min.js"></script>
+    <script src="/static/bootstrap.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
       var socket = io();
@@ -34,11 +35,13 @@
         $('#capture').attr('value', mode);
         if (mode === 'test') {
           $('#capture').html('Start Capture');
+          $('#capture').attr('class', 'btn btn-success');
           $('#config').attr('disabled', false);
           $('#iso').attr('disabled', false);
           $('#shutter').attr('disabled', false);
         } else if (mode === 'capture') {
           $('#capture').html('Stop Capture');
+          $('#capture').attr('class', 'btn btn-danger');
           $('#config').attr('disabled', true);
           $('#iso').attr('disabled', true);
           $('#shutter').attr('disabled', true);
@@ -54,6 +57,34 @@
           socket.emit('new-cam-config', data);
         });
       });
+      socket.on('image-list', function(image_list) {
+        $('#image_list').empty();
+        if (('dir' in image_list) && ('images' in image_list)) {
+          var row = '';
+          for (idx = 0; idx < image_list.images.length; idx++) {
+            if (idx % 3 == 0) {
+              if (row.length > 0) {
+                $('#image_list').append('<div class="row">' + row + '</div>');
+                row = '';
+              }
+            }
+            row += '<div class="col-md-4"><a href="' +
+                   image_list.dir+'/'+image_list.images[idx]+'" target="_blank">' +
+                   image_list.images[idx] +
+                   '</a></div>';
+          }
+          if (row.length > 0)
+            $('#image_list').append('<div class="row">' + row + '</div>');
+        }
+      });
+      socket.on('diskinfo', function(diskinfo) {
+        if (('total' in diskinfo) && ('free' in diskinfo)) {
+          var newlabel = 'Space left: ' + Math.round(diskinfo.free/diskinfo.total*100) +
+                         '% (' + Math.round(diskinfo.free/1000000) + '/' +
+                         Math.round(diskinfo.total/1000000) + ' MB)';
+          $('#diskfree').html(newlabel);
+        }
+      });
       $(function(){
         $('#capture').click(function(e){
           e.preventDefault();
@@ -65,12 +96,17 @@
           socket.emit('capture', action);
         });
       });
+      $(function(){
+        $('#images-modal').on('show.bs.modal', function (event) {
+          socket.emit('images', 'ls');
+        });
+      });
     </script>
   </head>
   <body>
     <div class="container">
       <h1 class="text-center">
-        Pi Camera Live Stream <small>Powered by PI</small>
+        RPi Stereo Camera Live Stream <small>Powered by PI</small>
       </h1>
       <form class="form-inline">
         <div class="form-group">
@@ -83,10 +119,36 @@
         </div>
         <button id="config" class="btn btn-default">Update Config</button>
         <button id="capture" class="btn btn-default"></button>
+        <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#images-modal">Captured Images</button>
       </form>
     </div>
     <div>
       <img src="" id="stream">
+    </div>
+    <div class="modal fade" id="images-modal" tabindex="-1" role="dialog" aria-labelledby="images-modal">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            <h4 class="modal-title" id="ImagesModalLabel">Captured Images</h4>
+          </div>
+          <div class="modal-body">
+            <div class="container-fluid" id="image_list">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <span style="float: left;">
+              <label id="diskfree">Space left: 20%</label>
+            </span>
+            <span style="float: right;">
+              <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+              <button type="button" class="btn btn-success">Download All</button>
+              <button type="button" class="btn btn-danger">Delete All</button>
+            </span>
+            <div class="clear"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </body>
 </html>
