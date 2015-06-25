@@ -2,6 +2,7 @@ var express = require('express');
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
+var tar = require('tar-fs');
 var fs = require('fs');
 var path = require('path');
 var spawn = require('child_process').spawn;
@@ -98,6 +99,20 @@ app.get('/capture/:file', function(req, res) {
 });
 
 
+app.get('/download', function(req, res) {
+  var pack = tar.pack(capture_dir, {
+    ignore: function(name) {
+      return name.substr(-4) !== '.jpg';
+    }
+  });
+  var d = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, "");
+  var fname = "images_" + d + ".tar";
+  res.setHeader('Content-disposition', 'attachment; filename=' + fname);
+  res.setHeader('content-type', 'application/octet-stream');
+  pack.pipe(res);
+});
+
+
 app.get('/', function(req, res) {
   res.sendfile(__dirname + '/index.html');
 });
@@ -132,6 +147,8 @@ io.on('connection', function(socket) {
   socket.on('images', function(data) {
     if (data === 'ls')
       listImages();
+    else if (data === 'rm')
+      deleteImages();
   });
 });
 
@@ -185,6 +202,26 @@ function emit_mode() {
 
 function emit_cam_config() {
   io.sockets.emit('current-cam-config', raspistill_args);
+}
+
+
+function emit_image_list(images) {
+  var image_list = {};
+  image_list.dir = 'capture';
+  image_list.images = images;
+  io.sockets.emit('image-list', image_list);
+}
+
+
+function emit_diskfree() {
+  diskfree(capture_partition, function (error, total, free, status) {
+    if (!error) {
+      var diskinfo = {};
+      diskinfo.total = total;
+      diskinfo.free = free;
+      io.sockets.emit('diskinfo', diskinfo);
+    }
+  });
 }
 
 
@@ -272,20 +309,46 @@ function listImages() {
                     return fs.statSync(capture_dir + b).mtime.getTime() -
                            fs.statSync(capture_dir + a).mtime.getTime();
                    });
-      if (images) {
-        var image_list = {};
-        image_list.dir = 'capture';
-        image_list.images = images;
-        io.sockets.emit('image-list', image_list);
-      }
+      if (images)
+        emit_image_list(images);
     }
   });
-  diskfree(capture_partition, function (error, total, free, status) {
-    if (!error) {
-      var diskinfo = {};
-      diskinfo.total = total;
-      diskinfo.free = free;
-      io.sockets.emit('diskinfo', diskinfo);
+  emit_diskfree();
+}
+
+
+function deleteFiles(files, callback) {
+  var i = files.length;
+  files.forEach(function(filepath) {
+    fs.unlink(capture_dir + filepath, function(err) {
+      i--;
+      if (err) {
+        callback(err);
+        return;
+      } else if (i <= 0) {
+        callback(null);
+      }
+    });
+  });
+}
+
+
+function deleteImages(){
+  fs.readdir(capture_dir, function(err, files) {
+    if (!err) {
+      var images = files.filter(function(file) {
+                    return (file.substr(-4) === '.jpg') || (file.substr(-5) === '.jpg~');
+                   });
+      if (images) {
+        deleteFiles(images, function(err) {
+            if (err) {
+              console.log(err);
+            } else {
+              emit_image_list([]);
+              emit_diskfree();
+            }
+          });
+      }
     }
   });
 }

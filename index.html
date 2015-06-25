@@ -19,6 +19,7 @@
     </style>
     <script src="/static/jquery-2.1.1.min.js"></script>
     <script src="/static/bootstrap.min.js"></script>
+    <script src="/static/jquery.fileDownload.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
       var socket = io();
@@ -98,7 +99,20 @@
       });
       $(function(){
         $('#images-modal').on('show.bs.modal', function (event) {
+          $('#image_list').empty();
           socket.emit('images', 'ls');
+        });
+      });
+      $(function(){
+        $('#downloadImages').click(function(e){
+          e.preventDefault();
+          $.fileDownload('/download');
+        });
+      });
+      $(function(){
+        $('#deleteImages').click(function(e){
+          e.preventDefault();
+          socket.emit('images', 'rm');
         });
       });
     </script>
@@ -142,8 +156,8 @@
             </span>
             <span style="float: right;">
               <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-              <button type="button" class="btn btn-success">Download All</button>
-              <button type="button" class="btn btn-danger">Delete All</button>
+              <button id="downloadImages" type="button" class="btn btn-success">Download All</button>
+              <button id="deleteImages" type="button" class="btn btn-danger">Delete All</button>
             </span>
             <div class="clear"></div>
           </div>
