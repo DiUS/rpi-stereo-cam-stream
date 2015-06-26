@@ -369,9 +369,12 @@ function killChild() {
 
 function stopStreaming() {
   if (Object.keys(sockets).length == 0) {
+    if (pollTimer) {
+      console.log('stop poll timer');
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
     if (mode === 'test') {
-      if (pollTimer)
-        clearInterval(pollTimer);
       killChild();
       app.set('pollDir', false);
     }
@@ -382,7 +385,12 @@ function stopStreaming() {
 function startStreaming(io) {
   // if already polling
   if (app.get('pollDir')) {
+    emit_mode();
     emit_latest_image();
+    if (!pollTimer) {
+      console.log('start poll timer');
+      pollTimer = setInterval(emit_latest_image, pollInterval);
+    }
     return;
   }
 

@@ -158,3 +158,15 @@ fake-hwclock save
 To adjust the time in fake hwclock, edit /etc/fake-hwclock.data.
 
 Add "service fake-hwclock start" to /etc/rc.local to restore a default system time.
+
+
+### Improve write performance
+```
+tune2fs -o journal_data_writeback /dev/mmcblk0p3
+tune2fs -O ^has_journal /dev/mmcblk0p3
+e2fsck -f /dev/mmcblk0p3
+```
+Edit /etc/fstab:
+```
+/dev/mmcblk0p3  /storage        ext4    defaults,noatime,nodiratime,data=writeback,errors=remount-ro  0       0
+```
