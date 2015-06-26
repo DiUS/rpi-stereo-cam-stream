@@ -118,6 +118,7 @@ app.get('/', function(req, res) {
 });
 
 
+exec("kill `pidof raspistill`");
 process.on('exit', killChild);
 
 var sockets = {};
