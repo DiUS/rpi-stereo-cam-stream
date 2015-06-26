@@ -215,10 +215,11 @@ function emit_image_list(images) {
 
 
 function emit_diskfree() {
-  diskfree(capture_partition, function (error, total, free, status) {
+  diskfree(capture_partition, function (error, total, used, free) {
     if (!error) {
       var diskinfo = {};
       diskinfo.total = total;
+      diskinfo.used = used;
       diskinfo.free = free;
       io.sockets.emit('diskinfo', diskinfo);
     }
@@ -279,24 +280,19 @@ function start_stop_capture(action) {
 function diskfree(drive, callback) {
   var total = 0;
   var free = 0;
-  var status = null;
+  var used = 0;
   exec("df -k '" + drive.replace(/'/g,"'\\''") + "'", function(error, stdout, stderr) {
     if (error) {
-      if (stderr.indexOf("No such file or directory") != -1) {
-        status = 'NOTFOUND';
-      } else {
-        status = 'STDERR';
-      }
-      callback ? callback(error, total, free, status)
+      callback ? callback(error, total, used, free)
       : console.error(stderr);
     } else {
       var lines = stdout.trim().split("\n");
       var str_disk_info = lines[lines.length - 1].replace( /[\s\n\r]+/g,' ');
       var disk_info = str_disk_info.split(' ');
       total = disk_info[1] * 1024;
+      used = disk_info[2] * 1024;
       free = disk_info[3] * 1024;
-      status = 'READY';
-      callback && callback(null, total, free, status);
+      callback && callback(null, total, used, free);
     }
   });
 }

@@ -81,10 +81,11 @@
         }
       });
       socket.on('diskinfo', function(diskinfo) {
-        if (('total' in diskinfo) && ('free' in diskinfo)) {
-          var newlabel = 'Space left: ' + Math.round(diskinfo.free/diskinfo.total*100) +
+        $('#diskfree').html('');
+        if (('used' in diskinfo) && ('free' in diskinfo)) {
+          var newlabel = 'Space left: ' + Math.round(diskinfo.free/(diskinfo.used+diskinfo.free)*100) +
                          '% (' + Math.round(diskinfo.free/1000000) + '/' +
-                         Math.round(diskinfo.total/1000000) + ' MB)';
+                         Math.round((diskinfo.used+diskinfo.free)/1000000) + ' MB)';
           $('#diskfree').html(newlabel);
         }
       });
@@ -102,6 +103,7 @@
       $(function(){
         $('#images-modal').on('show.bs.modal', function (event) {
           $('#image_list').empty();
+          $('#diskfree').html('');
           socket.emit('images', 'ls');
         });
       });
