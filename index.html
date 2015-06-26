@@ -48,7 +48,9 @@
           $('#shutter').attr('disabled', true);
         }
       });
-      socket.emit('start-stream');
+      socket.on('connect', function() {
+        socket.emit('start-stream');
+      });
       $(function(){
         $('#config').click(function(e){
           e.preventDefault();
