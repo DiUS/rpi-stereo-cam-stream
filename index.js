@@ -19,6 +19,7 @@ var capture_dir = capture_partition + '/photos/';
 var pollInterval = 5000;
 var raspistill_args = {
   "tl"  : 1000,
+  "be"  : null,
   "t"   : 0,
   "ISO" : 100,
   "ss"  : 800,

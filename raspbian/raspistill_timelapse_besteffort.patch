@@ -1,0 +1,109 @@
+diff --git a/host_applications/linux/apps/raspicam/RaspiStill.c b/host_applications/linux/apps/raspicam/RaspiStill.c
+index 77d8af0..7d76250 100644
+--- a/host_applications/linux/apps/raspicam/RaspiStill.c
++++ b/host_applications/linux/apps/raspicam/RaspiStill.c
+@@ -143,6 +143,7 @@ typedef struct
+    int datetime;                       /// Use DateTime instead of frame#
+    int timestamp;                      /// Use timestamp instead of frame#
+    int gpsdExif;                       /// Add real-time gpsd output as EXIF tags
++   int bestEffortTimelapse;            /// Do not drop frames if unable to keep up with requested frame rate.
+ 
+    RASPIPREVIEW_PARAMETERS preview_parameters;    /// Preview setup parameters
+    RASPICAM_CAMERA_PARAMETERS camera_parameters; /// Camera setup parameters
+@@ -198,6 +199,7 @@ static void store_exif_tag(RASPISTILL_STATE *state, const char *exif_tag);
+ #define CommandDateTime     23
+ #define CommandTimeStamp    24
+ #define CommandGpsdExif     25
++#define CommandBestEffortTL 26
+ 
+ static COMMAND_LIST cmdline_commands[] =
+ {
+@@ -227,6 +229,7 @@ static COMMAND_LIST cmdline_commands[] =
+    { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
+    { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
+    { CommandGpsdExif,  "-gpsdexif", "gps", "Apply real-time GPS information from gpsd as EXIF tags (requires libgps)", 0},
++   { CommandBestEffortTL, "-besteffort", "be", "Do not drop frames if unable to keep up with requested frame rate", 0},
+ };
+ 
+ static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
+@@ -662,6 +665,10 @@ static int parse_cmdline(int argc, const char **argv, RASPISTILL_STATE *state)
+          state->gpsdExif = 1;
+          break;
+ 
++      case CommandBestEffortTL:
++         state->bestEffortTimelapse = 1;
++         break;
++
+ 
+       default:
+       {
+@@ -1584,23 +1591,33 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
+       {
+          int64_t this_delay_ms = next_frame_ms - current_time;
+ 
++         if (state->verbose)
++            fprintf(stderr, "Next frame in: %"PRId64" ms\n", this_delay_ms);
+          if (this_delay_ms < 0)
+          {
+             // We are already past the next exposure time
+-            if (-this_delay_ms < -state->timelapse/2)
++            if (state->bestEffortTimelapse)
+             {
+-               // Less than a half frame late, take a frame and hope to catch up next time
+-               next_frame_ms += state->timelapse;
+-               vcos_log_error("Frame %d is %d ms late", *frame, (int)(-this_delay_ms));
++               int nskip = (-this_delay_ms)/state->timelapse;
++               next_frame_ms += (nskip + 1) * state->timelapse;
+             }
+             else
+             {
+-               int nskip = 1 + (-this_delay_ms)/state->timelapse;
+-               vcos_log_error("Skipping frame %d to restart at frame %d", *frame, *frame+nskip);
+-               *frame += nskip;
+-               this_delay_ms += nskip * state->timelapse;
+-               vcos_sleep(this_delay_ms);
+-               next_frame_ms += (nskip + 1) * state->timelapse;
++               if (-this_delay_ms < -state->timelapse/2)
++               {
++                  // Less than a half frame late, take a frame and hope to catch up next time
++                  next_frame_ms += state->timelapse;
++                  vcos_log_error("Frame %d is %d ms late", *frame, (int)(-this_delay_ms));
++               }
++               else
++               {
++                  int nskip = 1 + (-this_delay_ms)/state->timelapse;
++                  vcos_log_error("Skipping frame %d to restart at frame %d", *frame, *frame+nskip);
++                  *frame += nskip;
++                  this_delay_ms += nskip * state->timelapse;
++                  vcos_sleep(this_delay_ms);
++                  next_frame_ms += (nskip + 1) * state->timelapse;
++               }
+             }
+          }
+          else
+@@ -1914,9 +1931,6 @@ int main(int argc, const char **argv)
+ 
+             	keep_looping = wait_for_next_frame(&state, &frame);
+ 
+-                if (state.gpsdExif)
+-                   read_gps_data(&gpsd);
+-
+                 if (state.datetime)
+                 {
+                    time_t rawtime;
+@@ -2056,7 +2070,14 @@ int main(int argc, const char **argv)
+                      // Wait for capture to complete
+                      // For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
+                      // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
+-                     vcos_semaphore_wait(&callback_data.complete_semaphore);
++                     int semret = !VCOS_SUCCESS;
++                     while (semret != VCOS_SUCCESS)
++                     {
++                        if (state.gpsdExif)
++                           read_gps_data(&gpsd);
++                        semret = vcos_semaphore_wait_timeout(&callback_data.complete_semaphore, 200);
++                     }
++                     //vcos_semaphore_wait(&callback_data.complete_semaphore);
+                      if (state.verbose)
+                         fprintf(stderr, "Finished capture %d\n", frame);
+                   }

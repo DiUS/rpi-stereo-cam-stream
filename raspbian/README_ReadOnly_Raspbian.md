@@ -170,3 +170,8 @@ Edit /etc/fstab:
 ```
 /dev/mmcblk0p3  /storage        ext4    defaults,noatime,nodiratime,data=writeback,errors=remount-ro  0       0
 ```
+Add to /etc/sysctl.conf:
+vm.dirty_writeback_centisecs=100
+vm.dirty_expire_centisecs=1000
+vm.dirty_ratio=80
+vm.dirty_background_ratio=40
