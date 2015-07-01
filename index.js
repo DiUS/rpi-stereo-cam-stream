@@ -304,8 +304,8 @@ function listImages() {
     if (!err) {
       var images = files.filter(function(file) { return file.substr(-4) === '.jpg'; })
                    .sort(function(a, b) {
-                    return fs.statSync(capture_dir + b).mtime.getTime() -
-                           fs.statSync(capture_dir + a).mtime.getTime();
+                    return fs.statSync(capture_dir + a).mtime.getTime() -
+                           fs.statSync(capture_dir + b).mtime.getTime();
                    });
       if (images)
         emit_image_list(images);
