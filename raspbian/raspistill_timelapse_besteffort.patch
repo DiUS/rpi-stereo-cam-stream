@@ -1,5 +1,5 @@
 diff --git a/host_applications/linux/apps/raspicam/RaspiStill.c b/host_applications/linux/apps/raspicam/RaspiStill.c
-index fe8c283..3a232bb 100644
+index fe8c283..05b71e1 100644
 --- a/host_applications/linux/apps/raspicam/RaspiStill.c
 +++ b/host_applications/linux/apps/raspicam/RaspiStill.c
 @@ -143,6 +143,7 @@ typedef struct
@@ -22,7 +22,7 @@ index fe8c283..3a232bb 100644
     { CommandDateTime,  "-datetime",  "dt", "Replace frame number in file name with DateTime (YearMonthDayHourMinSec)", 0},
     { CommandTimeStamp, "-timestamp", "ts", "Replace frame number in file name with unix timestamp (seconds since 1900)", 0},
     { CommandGpsdExif,  "-gpsdexif", "gps", "Apply real-time GPS information from gpsd as EXIF tags (requires libgps)", 0},
-+   { CommandBestEffortTL, "-besteffort", "be", "Do not drop frames if unable to keep up with requested frame rate", 0},
++   { CommandBestEffortTL, "-besteffort", "be", "Do not drop frames if unable to keep up with timelapse frame rate", 0},
  };
  
  static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -107,3 +107,9 @@ index fe8c283..3a232bb 100644
                       if (state.verbose)
                          fprintf(stderr, "Finished capture %d\n", frame);
                    }
+@@ -2157,5 +2178,3 @@ error:
+ 
+    return exit_code;
+ }
+-
+-
