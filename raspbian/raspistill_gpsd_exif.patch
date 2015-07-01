@@ -32,7 +32,7 @@ index ca1853c..e5e0eaa 100644
  include ../Makefile.include
  
 diff --git a/host_applications/linux/apps/raspicam/RaspiStill.c b/host_applications/linux/apps/raspicam/RaspiStill.c
-index 3b26810..77d8af0 100644
+index 3b26810..fe8c283 100644
 --- a/host_applications/linux/apps/raspicam/RaspiStill.c
 +++ b/host_applications/linux/apps/raspicam/RaspiStill.c
 @@ -56,6 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -197,7 +197,7 @@ index 3b26810..77d8af0 100644
     int exit_code = EX_OK;
  
     MMAL_STATUS_T status = MMAL_SUCCESS;
-@@ -1690,6 +1780,27 @@ int main(int argc, const char **argv)
+@@ -1690,6 +1780,29 @@ int main(int argc, const char **argv)
        dump_status(&state);
     }
  
@@ -215,7 +215,9 @@ index 3b26810..77d8af0 100644
 +         libgps_unload(&gpsd);
 +         exit(EX_SOFTWARE);
 +      }
-+      if (wait_gps_time(&gpsd, 5000))
++      if (state.verbose)
++         fprintf(stderr, "Waiting for GPS time\n");
++      if (wait_gps_time(&gpsd, 5))
 +      {
 +         if (state.verbose)
 +            fprintf(stderr, "Warning: GPS time not available\n");
@@ -225,7 +227,7 @@ index 3b26810..77d8af0 100644
     if (state.useGL)
        raspitex_init(&state.raspitex_state);
  
-@@ -1798,8 +1909,14 @@ int main(int argc, const char **argv)
+@@ -1798,8 +1911,14 @@ int main(int argc, const char **argv)
  
              while (keep_looping)
              {
@@ -240,7 +242,7 @@ index 3b26810..77d8af0 100644
                  if (state.datetime)
                  {
                     time_t rawtime;
-@@ -1876,7 +1993,7 @@ int main(int argc, const char **argv)
+@@ -1876,7 +1995,7 @@ int main(int argc, const char **argv)
                    // once enabled no further exif data is accepted
                    if ( state.enableExifTags )
                    {
@@ -249,7 +251,7 @@ index 3b26810..77d8af0 100644
                    }
                    else
                    {
-@@ -2022,6 +2139,17 @@ error:
+@@ -2022,6 +2141,17 @@ error:
           fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
     }
  
@@ -2194,7 +2196,7 @@ index 0000000..5ed6c11
 +/* gps.h ends here */
 diff --git a/host_applications/linux/apps/raspicam/libgps.c b/host_applications/linux/apps/raspicam/libgps.c
 new file mode 100644
-index 0000000..d596c89
+index 0000000..ec5b88c
 --- /dev/null
 +++ b/host_applications/linux/apps/raspicam/libgps.c
 @@ -0,0 +1,185 @@
@@ -2310,13 +2312,13 @@ index 0000000..d596c89
 +   }
 +}
 +
-+int wait_gps_time(gpsd_info *gpsd, int timeout_ms)
++int wait_gps_time(gpsd_info *gpsd, int timeout_s)
 +{
 +   if (gpsd->gpsd_connected)
 +   {
 +      gps_mask_t mask = TIME_SET;
 +      time_t start = time(NULL);
-+      while ((time(NULL) - start < timeout_ms) &&
++      while ((time(NULL) - start < timeout_s) &&
 +             ((!gpsd->gpsdata.online) || ((gpsd->gpsdata.set & mask) == 0)))
 +      {
 +         if (gpsd->gps_waiting(&gpsd->gpsdata, 200))
@@ -2385,7 +2387,7 @@ index 0000000..d596c89
 +}
 diff --git a/host_applications/linux/apps/raspicam/libgps.h b/host_applications/linux/apps/raspicam/libgps.h
 new file mode 100644
-index 0000000..cfb778a
+index 0000000..a4d81d6
 --- /dev/null
 +++ b/host_applications/linux/apps/raspicam/libgps.h
 @@ -0,0 +1,70 @@
@@ -2451,7 +2453,7 @@ index 0000000..cfb778a
 +/* gpsd */
 +int connect_gpsd(gpsd_info *gpsd);
 +void disconnect_gpsd(gpsd_info *gpsd);
-+int wait_gps_time(gpsd_info *gpsd, int timeout_ms);
++int wait_gps_time(gpsd_info *gpsd, int timeout_s);
 +void read_gps_data(gpsd_info *gpsd);
 +
 +/* helper functions */
