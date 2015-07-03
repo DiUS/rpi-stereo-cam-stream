@@ -16,7 +16,8 @@ var prevModTime;
 var stream_dir = '/tmp/';
 var capture_partition = '/storage';
 var capture_dir = capture_partition + '/photos/';
-var pollInterval = 5000;
+var streamPollInterval = 5000;
+var capturePollInterval = 20000;
 var raspistill_args = {
   "tl"  : 1000,
   "be"  : null,
@@ -25,7 +26,6 @@ var raspistill_args = {
   "ss"  : 800,
   "awb" : "off",
   "awbg": "1,1",
-  "q"   : 100,
   "th"  : "none",
   "gps" : null,
   "bm"  : null,
@@ -35,9 +35,11 @@ var raspistill_args = {
   "3d"  : "sbs"
 };
 var stream_args = {
+  "q"   : 10,
   "o"   : stream_dir + "image_stream.jpg"
 };
 var capture_args = {
+  "q"   : 100,
   "ts"  : null,
   "o"   : capture_dir + "image_%d.jpg"
 };
@@ -136,7 +138,7 @@ io.on('connection', function(socket) {
     }
   });
   socket.on('start-stream', function() {
-    startStreaming(io);
+    startStreaming(socket);
   });
   socket.on('new-cam-config', function(data) {
     if (app.get('pollDir'))
@@ -160,18 +162,20 @@ http.listen(3000, function() {
 });
 
 
-function emit_latest_image() {
+function emit_latest_image(socket) {
   emit_mode();
-  emit_cam_config();
   if (mode === 'test') {
     fs.readdir(stream_dir, function(err, files) {
       if (!err) {
-        var latest = files.filter(function(file) { return file === 'image_stream.jpg'; }).shift();
+        var latest = files.filter(function(file) { return file === 'image_stream.jpg'; }).pop();
         if (latest) {
           var currModTime = fs.statSync(stream_dir + latest).mtime.getTime();
           if (currModTime != prevModTime) {
             prevModTime = currModTime;
-            io.sockets.emit('liveStream', 'stream/'+latest+'?_t=' + (Math.random() * 100000));
+            if (socket)
+              io.to(socket.id).emit('liveStream', 'stream/'+latest+'?_t=' + (Math.random() * 100000));
+            else
+              io.sockets.emit('liveStream', 'stream/'+latest+'?_t=' + (Math.random() * 100000));
           }
         }
       }
@@ -179,16 +183,15 @@ function emit_latest_image() {
   } else if (mode === 'capture') {
     fs.readdir(capture_dir, function(err, files) {
       if (!err) {
-        var latest = files.filter(function(file) { return file.substr(-4) === '.jpg'; })
-                      .sort(function(a, b) {
-                       return fs.statSync(capture_dir + b).mtime.getTime() -
-                              fs.statSync(capture_dir + a).mtime.getTime();
-                     }).shift();
+        var latest = files.filter(function(file) { return file.substr(-4) === '.jpg'; }).sort().pop();
         if (latest) {
           var currModTime = fs.statSync(capture_dir + latest).mtime.getTime();
           if (currModTime != prevModTime) {
             prevModTime = currModTime;
-            io.sockets.emit('liveStream', 'capture/'+latest+'?_t=' + (Math.random() * 100000));
+            if (socket)
+              io.to(socket.id).emit('liveStream', 'capture/'+latest+'?_t=' + (Math.random() * 100000));
+            else
+              io.sockets.emit('liveStream', 'capture/'+latest+'?_t=' + (Math.random() * 100000));
           }
         }
       }
@@ -197,32 +200,44 @@ function emit_latest_image() {
 }
 
 
-function emit_mode() {
-  io.sockets.emit('mode', mode);
+function emit_mode(socket) {
+  if (socket)
+    io.to(socket.id).emit('mode', mode);
+  else
+    io.sockets.emit('mode', mode);
 }
 
 
-function emit_cam_config() {
-  io.sockets.emit('current-cam-config', raspistill_args);
+function emit_cam_config(socket) {
+  if (socket)
+    io.to(socket.id).emit('current-cam-config', raspistill_args);
+  else
+    io.sockets.emit('current-cam-config', raspistill_args);
 }
 
 
-function emit_image_list(images) {
+function emit_image_list(images, socket) {
   var image_list = {};
   image_list.dir = 'capture';
   image_list.images = images;
-  io.sockets.emit('image-list', image_list);
+  if (socket)
+    io.to(socket.id).emit('image-list', image_list);
+  else
+    io.sockets.emit('image-list', image_list);
 }
 
 
-function emit_diskfree() {
+function emit_diskfree(socket) {
   diskfree(capture_partition, function (error, total, used, free) {
     if (!error) {
       var diskinfo = {};
       diskinfo.total = total;
       diskinfo.used = used;
       diskinfo.free = free;
-      io.sockets.emit('diskinfo', diskinfo);
+      if (socket)
+        io.to(socket.id).emit('diskinfo', diskinfo);
+      else
+        io.sockets.emit('diskinfo', diskinfo);
     }
   });
 }
@@ -248,12 +263,19 @@ function serializeRaspistillArgs(optional_args) {
 
 function update_cam_config(new_config) {
   if (mode === 'test') {
-    for (var k in new_config)
-      raspistill_args[k] = new_config[k];
-    console.log(JSON.stringify(serializeRaspistillArgs(stream_args)));
-    emit_cam_config();
-    killChild();
-    proc = spawn('raspistill', serializeRaspistillArgs(stream_args));
+    var different = false;
+    for (var k in new_config) {
+      if (raspistill_args[k] !== new_config[k]) {
+        different = true;
+        raspistill_args[k] = new_config[k];
+      }
+    }
+    if (different) {
+      console.log(JSON.stringify(serializeRaspistillArgs(stream_args)));
+      emit_cam_config();
+      killChild();
+      proc = spawn('raspistill', serializeRaspistillArgs(stream_args));
+    }
   } else {
     responseString = 'Not allowed';
   }
@@ -302,11 +324,7 @@ function diskfree(drive, callback) {
 function listImages() {
   fs.readdir(capture_dir, function(err, files) {
     if (!err) {
-      var images = files.filter(function(file) { return file.substr(-4) === '.jpg'; })
-                   .sort(function(a, b) {
-                    return fs.statSync(capture_dir + a).mtime.getTime() -
-                           fs.statSync(capture_dir + b).mtime.getTime();
-                   });
+      var images = files.filter(function(file) { return file.substr(-4) === '.jpg'; }).sort();
       if (images)
         emit_image_list(images);
     }
@@ -380,14 +398,18 @@ function stopStreaming() {
 }
 
 
-function startStreaming(io) {
+function startStreaming(socket) {
   // if already polling
   if (app.get('pollDir')) {
-    emit_mode();
-    emit_latest_image();
+    emit_mode(socket);
+    emit_cam_config(socket);
+    emit_latest_image(socket);
     if (!pollTimer) {
       console.log('start poll timer');
-      pollTimer = setInterval(emit_latest_image, pollInterval);
+      if (mode === 'capture')
+        pollTimer = setInterval(emit_latest_image, capturePollInterval);
+      else if (mode === 'test')
+        pollTimer = setInterval(emit_latest_image, streamPollInterval);
     }
     return;
   }
@@ -398,6 +420,7 @@ function startStreaming(io) {
   proc = spawn('raspistill', serializeRaspistillArgs(stream_args));
 
   console.log('Polling directories for changes...');
-  pollTimer = setInterval(emit_latest_image, pollInterval);
+  pollTimer = setInterval(emit_latest_image, streamPollInterval);
   emit_mode();
+  emit_cam_config();
 }

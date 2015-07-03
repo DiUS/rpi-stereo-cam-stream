@@ -28,9 +28,9 @@
       });
       socket.on('current-cam-config', function(data) {
         if ('ISO' in data)
-          $('#iso').attr('value', data.ISO);
+          $('#iso').val(data.ISO);
         if ('ss' in data)
-          $('#shutter').attr('value', data.ss);
+          $('#shutter').val(data.ss);
       });
       socket.on('mode', function(mode) {
         $('#capture').attr('value', mode);
@@ -62,6 +62,8 @@
       });
       socket.on('image-list', function(image_list) {
         $('#image_list').empty();
+        $('#image_list_text').html('');
+        var text = 'No images captured.';
         if (('dir' in image_list) && ('images' in image_list)) {
           var row = '';
           for (idx = 0; idx < image_list.images.length; idx++) {
@@ -76,9 +78,12 @@
                    image_list.images[idx] +
                    '</a></div>';
           }
-          if (row.length > 0)
+          if (row.length > 0) {
             $('#image_list').append('<div class="row">' + row + '</div>');
+            text = '';
+          }
         }
+        $('#image_list_text').html(text);
       });
       socket.on('diskinfo', function(diskinfo) {
         $('#diskfree').html('');
@@ -103,6 +108,7 @@
       $(function(){
         $('#images-modal').on('show.bs.modal', function (event) {
           $('#image_list').empty();
+          $('#image_list_text').html('Fetching data ...');
           $('#diskfree').html('');
           socket.emit('images', 'ls');
         });
@@ -152,6 +158,9 @@
           </div>
           <div class="modal-body">
             <div class="container-fluid" id="image_list">
+            </div>
+            <div>
+              <p id="image_list_text"></p>
             </div>
           </div>
           <div class="modal-footer">
