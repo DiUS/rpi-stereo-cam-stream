@@ -2196,10 +2196,10 @@ index 0000000..5ed6c11
 +/* gps.h ends here */
 diff --git a/host_applications/linux/apps/raspicam/libgps.c b/host_applications/linux/apps/raspicam/libgps.c
 new file mode 100644
-index 0000000..ec5b88c
+index 0000000..10e7261
 --- /dev/null
 +++ b/host_applications/linux/apps/raspicam/libgps.c
-@@ -0,0 +1,185 @@
+@@ -0,0 +1,176 @@
 +/*
 +Copyright (c) 2015, Joo Aun Saw
 +All rights reserved.
@@ -2361,27 +2361,18 @@ index 0000000..ec5b88c
 +
 +int deg_to_str(double f, char *buf, int buf_size)
 +{
-+   int sec, deg, min;
-+   long frac_deg;
-+   double fdsec, fsec, fdeg, fmin;
++   double fsec, fdeg, fmin;
 +
-+   if (buf_size > 0)
-+      *buf = 0;
-+
++   if (buf_size <= 0)
++      return -1;
++   *buf = 0;
 +   if (f < 0 || f > 360)
 +      return -1;
 +
 +   fmin = modf(f, &fdeg);
-+   deg = (int)fdeg;
-+   frac_deg = (long)(fmin * 1000000);
-+
 +   fsec = modf(fmin * 60, &fmin);
-+   min = (int)fmin;
-+   sec = (int)(fsec * 10000.0);
-+
-+   fdsec = modf(fsec * 60, &fsec);
-+   sec = (int)fsec;
-+   snprintf(buf, buf_size, "%02d/1,%02d/1,%02d/1", deg, min, sec);
++   fsec *= 60;
++   snprintf(buf, buf_size, "%03d/1,%02d/1,%05d/1000", (int)fdeg, (int)fmin, (int)(fsec*1000));
 +
 +   return 0;
 +}
