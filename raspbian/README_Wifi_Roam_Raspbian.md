@@ -6,8 +6,16 @@ auto lo
 iface lo inet loopback
 
 # hotplug ethernet
+auto eth0
 allow-hotplug eth0
 iface eth0 inet dhcp
+  post-up ifup eth0:0
+
+auto eth0:0
+allow-hotplug eth0:0
+iface eth0:0 inet static
+  address 192.168.111.1
+  netmask 255.255.255.0
 
 # wifi roaming
 allow-hotplug wlan0
@@ -29,4 +37,3 @@ chmod 600 /etc/wpa_supplicant/wpa-roam.conf
 wpa_passphrase '1st_Priority_SSID' 'Passphrase' >> /etc/wpa_supplicant/wpa-roam.conf
 wpa_passphrase '2nd_Priority_SSID' 'Passphrase' >> /etc/wpa_supplicant/wpa-roam.conf
 ```
-
