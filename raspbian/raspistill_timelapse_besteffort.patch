@@ -1,5 +1,5 @@
 diff --git a/host_applications/linux/apps/raspicam/RaspiStill.c b/host_applications/linux/apps/raspicam/RaspiStill.c
-index fe8c283..05b71e1 100644
+index 7a9375a..bedf835 100644
 --- a/host_applications/linux/apps/raspicam/RaspiStill.c
 +++ b/host_applications/linux/apps/raspicam/RaspiStill.c
 @@ -143,6 +143,7 @@ typedef struct
@@ -37,7 +37,7 @@ index fe8c283..05b71e1 100644
  
        default:
        {
-@@ -1584,23 +1591,33 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
+@@ -1583,23 +1590,33 @@ static int wait_for_next_frame(RASPISTILL_STATE *state, int *frame)
        {
           int64_t this_delay_ms = next_frame_ms - current_time;
  
@@ -81,7 +81,7 @@ index fe8c283..05b71e1 100644
              }
           }
           else
-@@ -1916,9 +1933,6 @@ int main(int argc, const char **argv)
+@@ -1915,9 +1932,6 @@ int main(int argc, const char **argv)
  
              	keep_looping = wait_for_next_frame(&state, &frame);
  
@@ -91,7 +91,7 @@ index fe8c283..05b71e1 100644
                  if (state.datetime)
                  {
                     time_t rawtime;
-@@ -2058,7 +2072,14 @@ int main(int argc, const char **argv)
+@@ -2057,7 +2071,14 @@ int main(int argc, const char **argv)
                       // Wait for capture to complete
                       // For some reason using vcos_semaphore_wait_timeout sometimes returns immediately with bad parameter error
                       // even though it appears to be all correct, so reverting to untimed one until figure out why its erratic
@@ -107,7 +107,7 @@ index fe8c283..05b71e1 100644
                       if (state.verbose)
                          fprintf(stderr, "Finished capture %d\n", frame);
                    }
-@@ -2157,5 +2178,3 @@ error:
+@@ -2156,5 +2177,3 @@ error:
  
     return exit_code;
  }

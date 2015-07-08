@@ -32,7 +32,7 @@ index ca1853c..e5e0eaa 100644
  include ../Makefile.include
  
 diff --git a/host_applications/linux/apps/raspicam/RaspiStill.c b/host_applications/linux/apps/raspicam/RaspiStill.c
-index 3b26810..fe8c283 100644
+index 3b26810..7a9375a 100644
 --- a/host_applications/linux/apps/raspicam/RaspiStill.c
 +++ b/host_applications/linux/apps/raspicam/RaspiStill.c
 @@ -56,6 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -104,7 +104,7 @@ index 3b26810..fe8c283 100644
  {
     time_t rawtime;
     struct tm *timeinfo;
-@@ -1314,6 +1325,84 @@ static void add_exif_tags(RASPISTILL_STATE *state)
+@@ -1314,6 +1325,83 @@ static void add_exif_tags(RASPISTILL_STATE *state)
     snprintf(exif_buf, sizeof(exif_buf), "IFD0.DateTime=%s", time_buf);
     add_exif_tag(state, exif_buf);
  
@@ -118,13 +118,12 @@ index 3b26810..fe8c283 100644
 +            fprintf(stderr, "Adding GPS EXIF\n");
 +         if (gpsdata->set & TIME_SET)
 +         {
-+            time_t fix_time = gpsdata->fix.time;
-+            struct tm *fixtm;
-+            fixtm = localtime(&fix_time);
-+            strftime(time_buf, sizeof(time_buf), "%Y:%m:%d", fixtm);
++            rawtime = gpsdata->fix.time;
++            timeinfo = localtime(&rawtime);
++            strftime(time_buf, sizeof(time_buf), "%Y:%m:%d", timeinfo);
 +            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSDateStamp=%s", time_buf);
 +            add_exif_tag(state, exif_buf);
-+            strftime(time_buf, sizeof(time_buf), "%H/1,%M/1,%S/1", fixtm);
++            strftime(time_buf, sizeof(time_buf), "%H/1,%M/1,%S/1", timeinfo);
 +            snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTimeStamp=%s", time_buf);
 +            add_exif_tag(state, exif_buf);
 +         }
@@ -177,8 +176,8 @@ index 3b26810..fe8c283 100644
 +         {
 +            if (isnan(gpsdata->fix.track) == 0)
 +            {
-+               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTrack=%d/10",
-+                        (int)(gpsdata->fix.track*10+0.5));
++               snprintf(exif_buf, sizeof(exif_buf), "GPS.GPSTrack=%d/100",
++                        (int)(gpsdata->fix.track*100+0.5));
 +               add_exif_tag(state, exif_buf);
 +               add_exif_tag(state, "GPS.GPSTrackRef=T");
 +            }
@@ -189,7 +188,7 @@ index 3b26810..fe8c283 100644
     // Now send any user supplied tags
  
     for (i=0;i<state->numExifTags && i < MAX_USER_EXIF_TAGS;i++)
-@@ -1646,6 +1735,7 @@ int main(int argc, const char **argv)
+@@ -1646,6 +1734,7 @@ int main(int argc, const char **argv)
  {
     // Our main data storage vessel..
     RASPISTILL_STATE state;
@@ -197,7 +196,7 @@ index 3b26810..fe8c283 100644
     int exit_code = EX_OK;
  
     MMAL_STATUS_T status = MMAL_SUCCESS;
-@@ -1690,6 +1780,29 @@ int main(int argc, const char **argv)
+@@ -1690,6 +1779,29 @@ int main(int argc, const char **argv)
        dump_status(&state);
     }
  
@@ -227,7 +226,7 @@ index 3b26810..fe8c283 100644
     if (state.useGL)
        raspitex_init(&state.raspitex_state);
  
-@@ -1798,8 +1911,14 @@ int main(int argc, const char **argv)
+@@ -1798,8 +1910,14 @@ int main(int argc, const char **argv)
  
              while (keep_looping)
              {
@@ -242,16 +241,16 @@ index 3b26810..fe8c283 100644
                  if (state.datetime)
                  {
                     time_t rawtime;
-@@ -1876,7 +1995,7 @@ int main(int argc, const char **argv)
+@@ -1876,7 +1994,7 @@ int main(int argc, const char **argv)
                    // once enabled no further exif data is accepted
                    if ( state.enableExifTags )
                    {
 -                     add_exif_tags(&state);
-+                     add_exif_tags(&state, &gpsd.gpsdata_cache);
++                     add_exif_tags(&state, &gpsd.gpsdata);
                    }
                    else
                    {
-@@ -2022,6 +2141,17 @@ error:
+@@ -2022,6 +2140,17 @@ error:
           fprintf(stderr, "Close down completed, all components disconnected, disabled and destroyed\n\n");
     }
  
@@ -2196,10 +2195,10 @@ index 0000000..5ed6c11
 +/* gps.h ends here */
 diff --git a/host_applications/linux/apps/raspicam/libgps.c b/host_applications/linux/apps/raspicam/libgps.c
 new file mode 100644
-index 0000000..10e7261
+index 0000000..4409a1f
 --- /dev/null
 +++ b/host_applications/linux/apps/raspicam/libgps.c
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,159 @@
 +/*
 +Copyright (c) 2015, Joo Aun Saw
 +All rights reserved.
@@ -2234,8 +2233,6 @@ index 0000000..10e7261
 +#include <dlfcn.h>
 +
 +#include "libgps.h"
-+
-+#define GPS_DATA_OF_INTEREST (TIME_SET | LATLON_SET | ALTITUDE_SET | SPEED_SET | TRACK_SET)
 +
 +static int libgps_load_sym(void **func, void *handle, char *symbol)
 +{
@@ -2341,21 +2338,6 @@ index 0000000..10e7261
 +         gpsd->gps_close(&gpsd->gpsdata);
 +         gpsd->gpsd_connected = 0;
 +      }
-+      else if (r > 0)
-+      {
-+         gpsd->gpsdata_cache.online = gpsd->gpsdata.online;
-+         if (gpsd->gpsdata.online)
-+         {
-+            gps_mask_t mask = GPS_DATA_OF_INTEREST;
-+            if ((gpsd->gpsdata.fix.mode >= MODE_2D) &&
-+                (gpsd->gpsdata.fix.mode >= gpsd->gpsdata_cache.fix.mode) &&
-+                ((gpsd->gpsdata.set & mask) >= gpsd->current_mask))
-+            {
-+               gpsd->current_mask = gpsd->gpsdata.set & mask;
-+               memcpy(&gpsd->gpsdata_cache, &gpsd->gpsdata, sizeof(gpsd->gpsdata_cache));
-+            }
-+         }
-+      }
 +   }
 +}
 +
@@ -2378,10 +2360,10 @@ index 0000000..10e7261
 +}
 diff --git a/host_applications/linux/apps/raspicam/libgps.h b/host_applications/linux/apps/raspicam/libgps.h
 new file mode 100644
-index 0000000..a4d81d6
+index 0000000..f21c8dc
 --- /dev/null
 +++ b/host_applications/linux/apps/raspicam/libgps.h
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,69 @@
 +/*
 +Copyright (c) 2015, Joo Aun Saw
 +All rights reserved.
@@ -2425,7 +2407,6 @@ index 0000000..a4d81d6
 +   int gpsd_connected;
 +   /* requires libgps (GPSD_API_MAJOR_VERSION >= 5) */
 +   gps_mask_t current_mask;
-+   struct gps_data_t gpsdata_cache;
 +   struct gps_data_t gpsdata;
 +   /* libgps functions */
 +   int (*gps_read)(struct gps_data_t *);
