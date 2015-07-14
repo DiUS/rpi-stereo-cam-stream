@@ -1,0 +1,38 @@
+// Definitions for LSM303DLHC accelerometer and magnetometer sensors
+/dts-v1/;
+
+/ {
+	compatible = "brcm,bcm2708";
+
+	fragment@0 {
+		target = <&i2c_arm>;
+
+		__overlay__ {
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+			status = "okay";
+
+			lsm303dlhc-accel@19 {
+				compatible = "st,lsm303dlhc-accel";
+				reg = <0x19>;
+				status = "okay";
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&i2c_arm>;
+
+		__overlay__ {
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+			status = "okay";
+
+			lsm303dlhc-magn@1e {
+				compatible = "st,lsm303dlhc-magn";
+				reg = <0x1e>;
+				status = "okay";
+			};
+		};
+	};
+};

@@ -1,0 +1,844 @@
+diff --git a/drivers/iio/accel/st_accel.h b/drivers/iio/accel/st_accel.h
+index c387763..aa10019 100644
+--- a/drivers/iio/accel/st_accel.h
++++ b/drivers/iio/accel/st_accel.h
+@@ -14,11 +14,13 @@
+ #include <linux/types.h>
+ #include <linux/iio/common/st_sensors.h>
+ 
++#define LIS3LV02DL_ACCEL_DEV_NAME	"lis3lv02dl_accel"
+ #define LSM303DLHC_ACCEL_DEV_NAME	"lsm303dlhc_accel"
+ #define LIS3DH_ACCEL_DEV_NAME		"lis3dh"
+ #define LSM330D_ACCEL_DEV_NAME		"lsm330d_accel"
+ #define LSM330DL_ACCEL_DEV_NAME		"lsm330dl_accel"
+ #define LSM330DLC_ACCEL_DEV_NAME	"lsm330dlc_accel"
++#define LIS331DL_ACCEL_DEV_NAME		"lis331dl_accel"
+ #define LIS331DLH_ACCEL_DEV_NAME	"lis331dlh"
+ #define LSM303DL_ACCEL_DEV_NAME		"lsm303dl_accel"
+ #define LSM303DLH_ACCEL_DEV_NAME	"lsm303dlh_accel"
+@@ -33,8 +35,7 @@ static const struct st_sensors_platform_data default_accel_pdata = {
+ 	.drdy_int_pin = 1,
+ };
+ 
+-int st_accel_common_probe(struct iio_dev *indio_dev,
+-					struct st_sensors_platform_data *pdata);
++int st_accel_common_probe(struct iio_dev *indio_dev);
+ void st_accel_common_remove(struct iio_dev *indio_dev);
+ 
+ #ifdef CONFIG_IIO_BUFFER
+diff --git a/drivers/iio/accel/st_accel_core.c b/drivers/iio/accel/st_accel_core.c
+index 0878648..9e6f827 100644
+--- a/drivers/iio/accel/st_accel_core.c
++++ b/drivers/iio/accel/st_accel_core.c
+@@ -129,6 +129,68 @@
+ #define ST_ACCEL_3_IG1_EN_MASK			0x08
+ #define ST_ACCEL_3_MULTIREAD_BIT		false
+ 
++/* CUSTOM VALUES FOR SENSOR 4 */
++#define ST_ACCEL_4_WAI_EXP			0x3a
++#define ST_ACCEL_4_ODR_ADDR			0x20
++#define ST_ACCEL_4_ODR_MASK			0x30 /* DF1 and DF0 */
++#define ST_ACCEL_4_ODR_AVL_40HZ_VAL		0x00
++#define ST_ACCEL_4_ODR_AVL_160HZ_VAL		0x01
++#define ST_ACCEL_4_ODR_AVL_640HZ_VAL		0x02
++#define ST_ACCEL_4_ODR_AVL_2560HZ_VAL		0x03
++#define ST_ACCEL_4_PW_ADDR			0x20
++#define ST_ACCEL_4_PW_MASK			0xc0
++#define ST_ACCEL_4_FS_ADDR			0x21
++#define ST_ACCEL_4_FS_MASK			0x80
++#define ST_ACCEL_4_FS_AVL_2_VAL			0X00
++#define ST_ACCEL_4_FS_AVL_6_VAL			0X01
++#define ST_ACCEL_4_FS_AVL_2_GAIN		IIO_G_TO_M_S_2(1024)
++#define ST_ACCEL_4_FS_AVL_6_GAIN		IIO_G_TO_M_S_2(340)
++#define ST_ACCEL_4_BDU_ADDR			0x21
++#define ST_ACCEL_4_BDU_MASK			0x40
++#define ST_ACCEL_4_DRDY_IRQ_ADDR		0x21
++#define ST_ACCEL_4_DRDY_IRQ_INT1_MASK		0x04
++#define ST_ACCEL_4_IG1_EN_ADDR			0x21
++#define ST_ACCEL_4_IG1_EN_MASK			0x08
++#define ST_ACCEL_4_MULTIREAD_BIT		true
++
++/* CUSTOM VALUES FOR SENSOR 5 */
++#define ST_ACCEL_5_WAI_EXP			0x3b
++#define ST_ACCEL_5_ODR_ADDR			0x20
++#define ST_ACCEL_5_ODR_MASK			0x80
++#define ST_ACCEL_5_ODR_AVL_100HZ_VAL		0x00
++#define ST_ACCEL_5_ODR_AVL_400HZ_VAL		0x01
++#define ST_ACCEL_5_PW_ADDR			0x20
++#define ST_ACCEL_5_PW_MASK			0x40
++#define ST_ACCEL_5_FS_ADDR			0x20
++#define ST_ACCEL_5_FS_MASK			0x20
++#define ST_ACCEL_5_FS_AVL_2_VAL			0X00
++#define ST_ACCEL_5_FS_AVL_8_VAL			0X01
++/* TODO: check these resulting gain settings, these are not in the datsheet */
++#define ST_ACCEL_5_FS_AVL_2_GAIN		IIO_G_TO_M_S_2(18000)
++#define ST_ACCEL_5_FS_AVL_8_GAIN		IIO_G_TO_M_S_2(72000)
++#define ST_ACCEL_5_DRDY_IRQ_ADDR		0x22
++#define ST_ACCEL_5_DRDY_IRQ_INT1_MASK		0x04
++#define ST_ACCEL_5_DRDY_IRQ_INT2_MASK		0x20
++#define ST_ACCEL_5_IG1_EN_ADDR			0x21
++#define ST_ACCEL_5_IG1_EN_MASK			0x08
++#define ST_ACCEL_5_MULTIREAD_BIT		false
++
++static const struct iio_chan_spec st_accel_8bit_channels[] = {
++	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
++			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
++			ST_SENSORS_SCAN_X, 1, IIO_MOD_X, 's', IIO_LE, 8, 8,
++			ST_ACCEL_DEFAULT_OUT_X_L_ADDR+1),
++	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
++			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
++			ST_SENSORS_SCAN_Y, 1, IIO_MOD_Y, 's', IIO_LE, 8, 8,
++			ST_ACCEL_DEFAULT_OUT_Y_L_ADDR+1),
++	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
++			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
++			ST_SENSORS_SCAN_Z, 1, IIO_MOD_Z, 's', IIO_LE, 8, 8,
++			ST_ACCEL_DEFAULT_OUT_Z_L_ADDR+1),
++	IIO_CHAN_SOFT_TIMESTAMP(3)
++};
++
+ static const struct iio_chan_spec st_accel_12bit_channels[] = {
+ 	ST_SENSORS_LSM_CHANNELS(IIO_ACCEL,
+ 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
+@@ -373,6 +435,111 @@ static const struct st_sensors st_accel_sensors[] = {
+ 		.multi_read_bit = ST_ACCEL_3_MULTIREAD_BIT,
+ 		.bootime = 2,
+ 	},
++	{
++		.wai = ST_ACCEL_4_WAI_EXP,
++		.sensors_supported = {
++			[0] = LIS3LV02DL_ACCEL_DEV_NAME,
++		},
++		.ch = (struct iio_chan_spec *)st_accel_12bit_channels,
++		.odr = {
++			.addr = ST_ACCEL_4_ODR_ADDR,
++			.mask = ST_ACCEL_4_ODR_MASK,
++			.odr_avl = {
++				{ 40, ST_ACCEL_4_ODR_AVL_40HZ_VAL },
++				{ 160, ST_ACCEL_4_ODR_AVL_160HZ_VAL, },
++				{ 640, ST_ACCEL_4_ODR_AVL_640HZ_VAL, },
++				{ 2560, ST_ACCEL_4_ODR_AVL_2560HZ_VAL, },
++			},
++		},
++		.pw = {
++			.addr = ST_ACCEL_4_PW_ADDR,
++			.mask = ST_ACCEL_4_PW_MASK,
++			.value_on = ST_SENSORS_DEFAULT_POWER_ON_VALUE,
++			.value_off = ST_SENSORS_DEFAULT_POWER_OFF_VALUE,
++		},
++		.enable_axis = {
++			.addr = ST_SENSORS_DEFAULT_AXIS_ADDR,
++			.mask = ST_SENSORS_DEFAULT_AXIS_MASK,
++		},
++		.fs = {
++			.addr = ST_ACCEL_4_FS_ADDR,
++			.mask = ST_ACCEL_4_FS_MASK,
++			.fs_avl = {
++				[0] = {
++					.num = ST_ACCEL_FS_AVL_2G,
++					.value = ST_ACCEL_4_FS_AVL_2_VAL,
++					.gain = ST_ACCEL_4_FS_AVL_2_GAIN,
++				},
++				[1] = {
++					.num = ST_ACCEL_FS_AVL_6G,
++					.value = ST_ACCEL_4_FS_AVL_6_VAL,
++					.gain = ST_ACCEL_4_FS_AVL_6_GAIN,
++				},
++			},
++		},
++		.bdu = {
++			.addr = ST_ACCEL_4_BDU_ADDR,
++			.mask = ST_ACCEL_4_BDU_MASK,
++		},
++		.drdy_irq = {
++			.addr = ST_ACCEL_4_DRDY_IRQ_ADDR,
++			.mask_int1 = ST_ACCEL_4_DRDY_IRQ_INT1_MASK,
++			.ig1 = {
++				.en_addr = ST_ACCEL_4_IG1_EN_ADDR,
++				.en_mask = ST_ACCEL_4_IG1_EN_MASK,
++			},
++		},
++		.multi_read_bit = ST_ACCEL_4_MULTIREAD_BIT,
++		.bootime = 2, /* guess */
++	},
++	{
++		.wai = ST_ACCEL_5_WAI_EXP,
++		.sensors_supported = {
++			[0] = LIS331DL_ACCEL_DEV_NAME,
++		},
++		.ch = (struct iio_chan_spec *)st_accel_8bit_channels,
++		.odr = {
++			.addr = ST_ACCEL_5_ODR_ADDR,
++			.mask = ST_ACCEL_5_ODR_MASK,
++			.odr_avl = {
++				{ 100, ST_ACCEL_5_ODR_AVL_100HZ_VAL },
++				{ 400, ST_ACCEL_5_ODR_AVL_400HZ_VAL, },
++			},
++		},
++		.pw = {
++			.addr = ST_ACCEL_5_PW_ADDR,
++			.mask = ST_ACCEL_5_PW_MASK,
++			.value_on = ST_SENSORS_DEFAULT_POWER_ON_VALUE,
++			.value_off = ST_SENSORS_DEFAULT_POWER_OFF_VALUE,
++		},
++		.enable_axis = {
++			.addr = ST_SENSORS_DEFAULT_AXIS_ADDR,
++			.mask = ST_SENSORS_DEFAULT_AXIS_MASK,
++		},
++		.fs = {
++			.addr = ST_ACCEL_5_FS_ADDR,
++			.mask = ST_ACCEL_5_FS_MASK,
++			.fs_avl = {
++				[0] = {
++					.num = ST_ACCEL_FS_AVL_2G,
++					.value = ST_ACCEL_5_FS_AVL_2_VAL,
++					.gain = ST_ACCEL_5_FS_AVL_2_GAIN,
++				},
++				[1] = {
++					.num = ST_ACCEL_FS_AVL_8G,
++					.value = ST_ACCEL_5_FS_AVL_8_VAL,
++					.gain = ST_ACCEL_5_FS_AVL_8_GAIN,
++				},
++			},
++		},
++		.drdy_irq = {
++			.addr = ST_ACCEL_5_DRDY_IRQ_ADDR,
++			.mask_int1 = ST_ACCEL_5_DRDY_IRQ_INT1_MASK,
++			.mask_int2 = ST_ACCEL_5_DRDY_IRQ_INT2_MASK,
++		},
++		.multi_read_bit = ST_ACCEL_5_MULTIREAD_BIT,
++		.bootime = 2, /* guess */
++	},
+ };
+ 
+ static int st_accel_read_raw(struct iio_dev *indio_dev,
+@@ -457,8 +624,7 @@ static const struct iio_trigger_ops st_accel_trigger_ops = {
+ #define ST_ACCEL_TRIGGER_OPS NULL
+ #endif
+ 
+-int st_accel_common_probe(struct iio_dev *indio_dev,
+-				struct st_sensors_platform_data *plat_data)
++int st_accel_common_probe(struct iio_dev *indio_dev)
+ {
+ 	struct st_sensor_data *adata = iio_priv(indio_dev);
+ 	int irq = adata->get_irq_data_ready(indio_dev);
+@@ -466,6 +632,7 @@ int st_accel_common_probe(struct iio_dev *indio_dev,
+ 
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 	indio_dev->info = &accel_info;
++	mutex_init(&adata->tb.buf_lock);
+ 
+ 	st_sensors_power_enable(indio_dev);
+ 
+@@ -483,11 +650,11 @@ int st_accel_common_probe(struct iio_dev *indio_dev,
+ 						&adata->sensor->fs.fs_avl[0];
+ 	adata->odr = adata->sensor->odr.odr_avl[0].hz;
+ 
+-	if (!plat_data)
+-		plat_data =
++	if (!adata->dev->platform_data)
++		adata->dev->platform_data =
+ 			(struct st_sensors_platform_data *)&default_accel_pdata;
+ 
+-	err = st_sensors_init_sensor(indio_dev, plat_data);
++	err = st_sensors_init_sensor(indio_dev, adata->dev->platform_data);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/accel/st_accel_i2c.c b/drivers/iio/accel/st_accel_i2c.c
+index 7164aef..d4ad72c 100644
+--- a/drivers/iio/accel/st_accel_i2c.c
++++ b/drivers/iio/accel/st_accel_i2c.c
+@@ -21,6 +21,10 @@
+ #ifdef CONFIG_OF
+ static const struct of_device_id st_accel_of_match[] = {
+ 	{
++		.compatible = "st,lis3lv02dl-accel",
++		.data = LIS3LV02DL_ACCEL_DEV_NAME,
++	},
++	{
+ 		.compatible = "st,lsm303dlh-accel",
+ 		.data = LSM303DLH_ACCEL_DEV_NAME,
+ 	},
+@@ -45,6 +49,10 @@ static const struct of_device_id st_accel_of_match[] = {
+ 		.data = LSM330DLC_ACCEL_DEV_NAME,
+ 	},
+ 	{
++		.compatible = "st,lis331dl-accel",
++		.data = LIS331DL_ACCEL_DEV_NAME,
++	},
++	{
+ 		.compatible = "st,lis331dlh-accel",
+ 		.data = LIS331DLH_ACCEL_DEV_NAME,
+ 	},
+@@ -79,12 +87,11 @@ static int st_accel_i2c_probe(struct i2c_client *client,
+ 		return -ENOMEM;
+ 
+ 	adata = iio_priv(indio_dev);
+-	adata->dev = &client->dev;
+ 	st_sensors_of_i2c_probe(client, st_accel_of_match);
+ 
+ 	st_sensors_i2c_configure(indio_dev, client, adata);
+ 
+-	err = st_accel_common_probe(indio_dev, client->dev.platform_data);
++	err = st_accel_common_probe(indio_dev);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/accel/st_accel_spi.c b/drivers/iio/accel/st_accel_spi.c
+index 1956396..12ec293 100644
+--- a/drivers/iio/accel/st_accel_spi.c
++++ b/drivers/iio/accel/st_accel_spi.c
+@@ -29,11 +29,10 @@ static int st_accel_spi_probe(struct spi_device *spi)
+ 		return -ENOMEM;
+ 
+ 	adata = iio_priv(indio_dev);
+-	adata->dev = &spi->dev;
+ 
+ 	st_sensors_spi_configure(indio_dev, spi, adata);
+ 
+-	err = st_accel_common_probe(indio_dev, spi->dev.platform_data);
++	err = st_accel_common_probe(indio_dev);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/common/st_sensors/st_sensors_core.c b/drivers/iio/common/st_sensors/st_sensors_core.c
+index 24cfe4e..cbc97cd 100644
+--- a/drivers/iio/common/st_sensors/st_sensors_core.c
++++ b/drivers/iio/common/st_sensors/st_sensors_core.c
+@@ -240,6 +240,16 @@ static int st_sensors_set_drdy_int_pin(struct iio_dev *indio_dev,
+ {
+ 	struct st_sensor_data *sdata = iio_priv(indio_dev);
+ 
++	/* Sensor does not support interrupts */
++	if (sdata->sensor->drdy_irq.addr == 0) {
++		if (pdata->drdy_int_pin)
++			dev_info(&indio_dev->dev,
++				 "DRDY on pin INT%d specified, but sensor "
++				 "does not support interrupts\n",
++				 pdata->drdy_int_pin);
++		return 0;
++	}
++
+ 	switch (pdata->drdy_int_pin) {
+ 	case 1:
+ 		if (sdata->sensor->drdy_irq.mask_int1 == 0) {
+@@ -280,7 +290,7 @@ static struct st_sensors_platform_data *st_sensors_of_probe(struct device *dev,
+ 	if (!of_property_read_u32(np, "st,drdy-int-pin", &val) && (val <= 2))
+ 		pdata->drdy_int_pin = (u8) val;
+ 	else
+-		pdata->drdy_int_pin = defdata ? defdata->drdy_int_pin : 1;
++		pdata->drdy_int_pin = defdata ? defdata->drdy_int_pin : 0;
+ 
+ 	return pdata;
+ }
+@@ -299,8 +309,6 @@ int st_sensors_init_sensor(struct iio_dev *indio_dev,
+ 	struct st_sensors_platform_data *of_pdata;
+ 	int err = 0;
+ 
+-	mutex_init(&sdata->tb.buf_lock);
+-
+ 	/* If OF/DT pdata exists, it will take precedence of anything else */
+ 	of_pdata = st_sensors_of_probe(indio_dev->dev.parent, pdata);
+ 	if (of_pdata)
+@@ -329,10 +337,13 @@ int st_sensors_init_sensor(struct iio_dev *indio_dev,
+ 		return err;
+ 
+ 	/* set BDU */
+-	err = st_sensors_write_data_with_mask(indio_dev,
+-			sdata->sensor->bdu.addr, sdata->sensor->bdu.mask, true);
+-	if (err < 0)
+-		return err;
++	if (sdata->sensor->bdu.addr) {
++		err = st_sensors_write_data_with_mask(indio_dev,
++					sdata->sensor->bdu.addr,
++					sdata->sensor->bdu.mask, true);
++		if (err < 0)
++			return err;
++	}
+ 
+ 	err = st_sensors_set_axis_enable(indio_dev, ST_SENSORS_ENABLE_ALL_AXIS);
+ 
+@@ -413,7 +424,9 @@ static int st_sensors_read_axis_data(struct iio_dev *indio_dev,
+ 	if (err < 0)
+ 		goto st_sensors_free_memory;
+ 
+-	if (byte_for_channel == 2)
++	if (byte_for_channel == 1)
++		*data = (s8)*outdata;
++	else if (byte_for_channel == 2)
+ 		*data = (s16)get_unaligned_le16(outdata);
+ 	else if (byte_for_channel == 3)
+ 		*data = (s32)st_sensors_get_unaligned_le24(outdata);
+@@ -482,7 +495,8 @@ int st_sensors_check_device_support(struct iio_dev *indio_dev,
+ 			break;
+ 	}
+ 	if (n == ARRAY_SIZE(sensors[i].sensors_supported)) {
+-		dev_err(&indio_dev->dev, "device name and WhoAmI mismatch.\n");
++		dev_err(&indio_dev->dev, "device name \"%s\" and WhoAmI (0x%02x) mismatch",
++			indio_dev->name, wai);
+ 		goto sensor_name_mismatch;
+ 	}
+ 
+diff --git a/drivers/iio/common/st_sensors/st_sensors_i2c.c b/drivers/iio/common/st_sensors/st_sensors_i2c.c
+index bb6f308..98cfee29 100644
+--- a/drivers/iio/common/st_sensors/st_sensors_i2c.c
++++ b/drivers/iio/common/st_sensors/st_sensors_i2c.c
+@@ -72,6 +72,7 @@ void st_sensors_i2c_configure(struct iio_dev *indio_dev,
+ 	indio_dev->dev.parent = &client->dev;
+ 	indio_dev->name = client->name;
+ 
++	sdata->dev = &client->dev;
+ 	sdata->tf = &st_sensors_tf_i2c;
+ 	sdata->get_irq_data_ready = st_sensors_i2c_get_irq;
+ }
+diff --git a/drivers/iio/common/st_sensors/st_sensors_spi.c b/drivers/iio/common/st_sensors/st_sensors_spi.c
+index 251baf6..5b37737 100644
+--- a/drivers/iio/common/st_sensors/st_sensors_spi.c
++++ b/drivers/iio/common/st_sensors/st_sensors_spi.c
+@@ -54,7 +54,7 @@ static int st_sensors_spi_read(struct st_sensor_transfer_buffer *tb,
+ 	if (err)
+ 		goto acc_spi_read_error;
+ 
+-	memcpy(data, tb->rx_buf, len*sizeof(u8));
++	memcpy(data, tb->rx_buf, len);
+ 	mutex_unlock(&tb->buf_lock);
+ 	return len;
+ 
+@@ -111,6 +111,7 @@ void st_sensors_spi_configure(struct iio_dev *indio_dev,
+ 	indio_dev->dev.parent = &spi->dev;
+ 	indio_dev->name = spi->modalias;
+ 
++	sdata->dev = &spi->dev;
+ 	sdata->tf = &st_sensors_tf_spi;
+ 	sdata->get_irq_data_ready = st_sensors_spi_get_irq;
+ }
+diff --git a/drivers/iio/common/st_sensors/st_sensors_trigger.c b/drivers/iio/common/st_sensors/st_sensors_trigger.c
+index 8d8ca6f..3e90704 100644
+--- a/drivers/iio/common/st_sensors/st_sensors_trigger.c
++++ b/drivers/iio/common/st_sensors/st_sensors_trigger.c
+@@ -37,8 +37,10 @@ int st_sensors_allocate_trigger(struct iio_dev *indio_dev,
+ 			IRQF_TRIGGER_RISING,
+ 			sdata->trig->name,
+ 			sdata->trig);
+-	if (err)
++	if (err) {
++		dev_err(&indio_dev->dev, "failed to request trigger IRQ.\n");
+ 		goto request_irq_error;
++	}
+ 
+ 	iio_trigger_set_drvdata(sdata->trig, indio_dev);
+ 	sdata->trig->ops = trigger_ops;
+diff --git a/drivers/iio/gyro/st_gyro.h b/drivers/iio/gyro/st_gyro.h
+index c197360..5353d63 100644
+--- a/drivers/iio/gyro/st_gyro.h
++++ b/drivers/iio/gyro/st_gyro.h
+@@ -30,8 +30,7 @@ static const struct st_sensors_platform_data gyro_pdata = {
+ 	.drdy_int_pin = 2,
+ };
+ 
+-int st_gyro_common_probe(struct iio_dev *indio_dev,
+-					struct st_sensors_platform_data *pdata);
++int st_gyro_common_probe(struct iio_dev *indio_dev);
+ void st_gyro_common_remove(struct iio_dev *indio_dev);
+ 
+ #ifdef CONFIG_IIO_BUFFER
+diff --git a/drivers/iio/gyro/st_gyro_core.c b/drivers/iio/gyro/st_gyro_core.c
+index f156fc6..29a552a 100644
+--- a/drivers/iio/gyro/st_gyro_core.c
++++ b/drivers/iio/gyro/st_gyro_core.c
+@@ -87,6 +87,31 @@
+ #define ST_GYRO_2_DRDY_IRQ_INT2_MASK		0x08
+ #define ST_GYRO_2_MULTIREAD_BIT			true
+ 
++/* CUSTOM VALUES FOR SENSOR 3 */
++#define ST_GYRO_3_WAI_EXP			0xd7
++#define ST_GYRO_3_ODR_ADDR			0x20
++#define ST_GYRO_3_ODR_MASK			0xc0
++#define ST_GYRO_3_ODR_AVL_95HZ_VAL		0x00
++#define ST_GYRO_3_ODR_AVL_190HZ_VAL		0x01
++#define ST_GYRO_3_ODR_AVL_380HZ_VAL		0x02
++#define ST_GYRO_3_ODR_AVL_760HZ_VAL		0x03
++#define ST_GYRO_3_PW_ADDR			0x20
++#define ST_GYRO_3_PW_MASK			0x08
++#define ST_GYRO_3_FS_ADDR			0x23
++#define ST_GYRO_3_FS_MASK			0x30
++#define ST_GYRO_3_FS_AVL_250_VAL		0x00
++#define ST_GYRO_3_FS_AVL_500_VAL		0x01
++#define ST_GYRO_3_FS_AVL_2000_VAL		0x02
++#define ST_GYRO_3_FS_AVL_250_GAIN		IIO_DEGREE_TO_RAD(8750)
++#define ST_GYRO_3_FS_AVL_500_GAIN		IIO_DEGREE_TO_RAD(17500)
++#define ST_GYRO_3_FS_AVL_2000_GAIN		IIO_DEGREE_TO_RAD(70000)
++#define ST_GYRO_3_BDU_ADDR			0x23
++#define ST_GYRO_3_BDU_MASK			0x80
++#define ST_GYRO_3_DRDY_IRQ_ADDR			0x22
++#define ST_GYRO_3_DRDY_IRQ_INT2_MASK		0x08
++#define ST_GYRO_3_MULTIREAD_BIT			true
++
++
+ static const struct iio_chan_spec st_gyro_16bit_channels[] = {
+ 	ST_SENSORS_LSM_CHANNELS(IIO_ANGL_VEL,
+ 			BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE),
+@@ -225,6 +250,64 @@ static const struct st_sensors st_gyro_sensors[] = {
+ 		.multi_read_bit = ST_GYRO_2_MULTIREAD_BIT,
+ 		.bootime = 2,
+ 	},
++	{
++		.wai = ST_GYRO_3_WAI_EXP,
++		.sensors_supported = {
++			[0] = L3GD20_GYRO_DEV_NAME,
++		},
++		.ch = (struct iio_chan_spec *)st_gyro_16bit_channels,
++		.odr = {
++			.addr = ST_GYRO_3_ODR_ADDR,
++			.mask = ST_GYRO_3_ODR_MASK,
++			.odr_avl = {
++				{ 95, ST_GYRO_3_ODR_AVL_95HZ_VAL, },
++				{ 190, ST_GYRO_3_ODR_AVL_190HZ_VAL, },
++				{ 380, ST_GYRO_3_ODR_AVL_380HZ_VAL, },
++				{ 760, ST_GYRO_3_ODR_AVL_760HZ_VAL, },
++			},
++		},
++		.pw = {
++			.addr = ST_GYRO_3_PW_ADDR,
++			.mask = ST_GYRO_3_PW_MASK,
++			.value_on = ST_SENSORS_DEFAULT_POWER_ON_VALUE,
++			.value_off = ST_SENSORS_DEFAULT_POWER_OFF_VALUE,
++		},
++		.enable_axis = {
++			.addr = ST_SENSORS_DEFAULT_AXIS_ADDR,
++			.mask = ST_SENSORS_DEFAULT_AXIS_MASK,
++		},
++		.fs = {
++			.addr = ST_GYRO_3_FS_ADDR,
++			.mask = ST_GYRO_3_FS_MASK,
++			.fs_avl = {
++				[0] = {
++					.num = ST_GYRO_FS_AVL_250DPS,
++					.value = ST_GYRO_3_FS_AVL_250_VAL,
++					.gain = ST_GYRO_3_FS_AVL_250_GAIN,
++				},
++				[1] = {
++					.num = ST_GYRO_FS_AVL_500DPS,
++					.value = ST_GYRO_3_FS_AVL_500_VAL,
++					.gain = ST_GYRO_3_FS_AVL_500_GAIN,
++				},
++				[2] = {
++					.num = ST_GYRO_FS_AVL_2000DPS,
++					.value = ST_GYRO_3_FS_AVL_2000_VAL,
++					.gain = ST_GYRO_3_FS_AVL_2000_GAIN,
++				},
++			},
++		},
++		.bdu = {
++			.addr = ST_GYRO_3_BDU_ADDR,
++			.mask = ST_GYRO_3_BDU_MASK,
++		},
++		.drdy_irq = {
++			.addr = ST_GYRO_3_DRDY_IRQ_ADDR,
++			.mask_int2 = ST_GYRO_3_DRDY_IRQ_INT2_MASK,
++		},
++		.multi_read_bit = ST_GYRO_3_MULTIREAD_BIT,
++		.bootime = 2,
++	},
+ };
+ 
+ static int st_gyro_read_raw(struct iio_dev *indio_dev,
+@@ -309,8 +392,7 @@ static const struct iio_trigger_ops st_gyro_trigger_ops = {
+ #define ST_GYRO_TRIGGER_OPS NULL
+ #endif
+ 
+-int st_gyro_common_probe(struct iio_dev *indio_dev,
+-					struct st_sensors_platform_data *pdata)
++int st_gyro_common_probe(struct iio_dev *indio_dev)
+ {
+ 	struct st_sensor_data *gdata = iio_priv(indio_dev);
+ 	int irq = gdata->get_irq_data_ready(indio_dev);
+@@ -318,6 +400,7 @@ int st_gyro_common_probe(struct iio_dev *indio_dev,
+ 
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 	indio_dev->info = &gyro_info;
++	mutex_init(&gdata->tb.buf_lock);
+ 
+ 	st_sensors_power_enable(indio_dev);
+ 
+@@ -335,7 +418,8 @@ int st_gyro_common_probe(struct iio_dev *indio_dev,
+ 						&gdata->sensor->fs.fs_avl[0];
+ 	gdata->odr = gdata->sensor->odr.odr_avl[0].hz;
+ 
+-	err = st_sensors_init_sensor(indio_dev, pdata);
++	err = st_sensors_init_sensor(indio_dev,
++				(struct st_sensors_platform_data *)&gyro_pdata);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/gyro/st_gyro_i2c.c b/drivers/iio/gyro/st_gyro_i2c.c
+index 8fa0ad2..64480b1 100644
+--- a/drivers/iio/gyro/st_gyro_i2c.c
++++ b/drivers/iio/gyro/st_gyro_i2c.c
+@@ -67,13 +67,11 @@ static int st_gyro_i2c_probe(struct i2c_client *client,
+ 		return -ENOMEM;
+ 
+ 	gdata = iio_priv(indio_dev);
+-	gdata->dev = &client->dev;
+ 	st_sensors_of_i2c_probe(client, st_gyro_of_match);
+ 
+ 	st_sensors_i2c_configure(indio_dev, client, gdata);
+ 
+-	err = st_gyro_common_probe(indio_dev,
+-				(struct st_sensors_platform_data *)&gyro_pdata);
++	err = st_gyro_common_probe(indio_dev);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/gyro/st_gyro_spi.c b/drivers/iio/gyro/st_gyro_spi.c
+index b4ad3be..e59bead 100644
+--- a/drivers/iio/gyro/st_gyro_spi.c
++++ b/drivers/iio/gyro/st_gyro_spi.c
+@@ -29,12 +29,10 @@ static int st_gyro_spi_probe(struct spi_device *spi)
+ 		return -ENOMEM;
+ 
+ 	gdata = iio_priv(indio_dev);
+-	gdata->dev = &spi->dev;
+ 
+ 	st_sensors_spi_configure(indio_dev, spi, gdata);
+ 
+-	err = st_gyro_common_probe(indio_dev,
+-				(struct st_sensors_platform_data *)&gyro_pdata);
++	err = st_gyro_common_probe(indio_dev);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/magnetometer/st_magn.h b/drivers/iio/magnetometer/st_magn.h
+index 694e33e..287691c 100644
+--- a/drivers/iio/magnetometer/st_magn.h
++++ b/drivers/iio/magnetometer/st_magn.h
+@@ -14,12 +14,12 @@
+ #include <linux/types.h>
+ #include <linux/iio/common/st_sensors.h>
+ 
++#define LSM303DLH_MAGN_DEV_NAME		"lsm303dlh_magn"
+ #define LSM303DLHC_MAGN_DEV_NAME	"lsm303dlhc_magn"
+ #define LSM303DLM_MAGN_DEV_NAME		"lsm303dlm_magn"
+ #define LIS3MDL_MAGN_DEV_NAME		"lis3mdl"
+ 
+-int st_magn_common_probe(struct iio_dev *indio_dev,
+-					struct st_sensors_platform_data *pdata);
++int st_magn_common_probe(struct iio_dev *indio_dev);
+ void st_magn_common_remove(struct iio_dev *indio_dev);
+ 
+ #ifdef CONFIG_IIO_BUFFER
+diff --git a/drivers/iio/magnetometer/st_magn_core.c b/drivers/iio/magnetometer/st_magn_core.c
+index 68cae86..1462380 100644
+--- a/drivers/iio/magnetometer/st_magn_core.c
++++ b/drivers/iio/magnetometer/st_magn_core.c
+@@ -45,6 +45,46 @@
+ #define ST_MAGN_FS_AVL_12000MG			12000
+ #define ST_MAGN_FS_AVL_16000MG			16000
+ 
++/* CUSTOM VALUES FOR SENSOR 0 */
++#define ST_MAGN_0_ODR_ADDR			0x00
++#define ST_MAGN_0_ODR_MASK			0x1c
++#define ST_MAGN_0_ODR_AVL_1HZ_VAL		0x00
++#define ST_MAGN_0_ODR_AVL_2HZ_VAL		0x01
++#define ST_MAGN_0_ODR_AVL_3HZ_VAL		0x02
++#define ST_MAGN_0_ODR_AVL_8HZ_VAL		0x03
++#define ST_MAGN_0_ODR_AVL_15HZ_VAL		0x04
++#define ST_MAGN_0_ODR_AVL_30HZ_VAL		0x05
++#define ST_MAGN_0_ODR_AVL_75HZ_VAL		0x06
++#define ST_MAGN_0_ODR_AVL_220HZ_VAL		0x07
++#define ST_MAGN_0_PW_ADDR			0x02
++#define ST_MAGN_0_PW_MASK			0x03
++#define ST_MAGN_0_PW_ON				0x00
++#define ST_MAGN_0_PW_OFF			0x03
++#define ST_MAGN_0_FS_ADDR			0x01
++#define ST_MAGN_0_FS_MASK			0xe0
++#define ST_MAGN_0_FS_AVL_1300_VAL		0x01
++#define ST_MAGN_0_FS_AVL_1900_VAL		0x02
++#define ST_MAGN_0_FS_AVL_2500_VAL		0x03
++#define ST_MAGN_0_FS_AVL_4000_VAL		0x04
++#define ST_MAGN_0_FS_AVL_4700_VAL		0x05
++#define ST_MAGN_0_FS_AVL_5600_VAL		0x06
++#define ST_MAGN_0_FS_AVL_8100_VAL		0x07
++#define ST_MAGN_0_FS_AVL_1300_GAIN_XY		1100
++#define ST_MAGN_0_FS_AVL_1900_GAIN_XY		855
++#define ST_MAGN_0_FS_AVL_2500_GAIN_XY		670
++#define ST_MAGN_0_FS_AVL_4000_GAIN_XY		450
++#define ST_MAGN_0_FS_AVL_4700_GAIN_XY		400
++#define ST_MAGN_0_FS_AVL_5600_GAIN_XY		330
++#define ST_MAGN_0_FS_AVL_8100_GAIN_XY		230
++#define ST_MAGN_0_FS_AVL_1300_GAIN_Z		980
++#define ST_MAGN_0_FS_AVL_1900_GAIN_Z		760
++#define ST_MAGN_0_FS_AVL_2500_GAIN_Z		600
++#define ST_MAGN_0_FS_AVL_4000_GAIN_Z		400
++#define ST_MAGN_0_FS_AVL_4700_GAIN_Z		355
++#define ST_MAGN_0_FS_AVL_5600_GAIN_Z		295
++#define ST_MAGN_0_FS_AVL_8100_GAIN_Z		205
++#define ST_MAGN_0_MULTIREAD_BIT			false
++
+ /* CUSTOM VALUES FOR SENSOR 1 */
+ #define ST_MAGN_1_WAI_EXP			0x3c
+ #define ST_MAGN_1_ODR_ADDR			0x00
+@@ -151,6 +191,82 @@ static const struct iio_chan_spec st_magn_2_16bit_channels[] = {
+ 
+ static const struct st_sensors st_magn_sensors[] = {
+ 	{
++		.wai = 0, /* This sensor has no valid WhoAmI report 0 */
++		.sensors_supported = {
++			[0] = LSM303DLH_MAGN_DEV_NAME,
++		},
++		.ch = (struct iio_chan_spec *)st_magn_16bit_channels,
++		.odr = {
++			.addr = ST_MAGN_0_ODR_ADDR,
++			.mask = ST_MAGN_0_ODR_MASK,
++			.odr_avl = {
++				{ 1, ST_MAGN_0_ODR_AVL_1HZ_VAL, },
++				{ 2, ST_MAGN_0_ODR_AVL_2HZ_VAL, },
++				{ 3, ST_MAGN_0_ODR_AVL_3HZ_VAL, },
++				{ 8, ST_MAGN_0_ODR_AVL_8HZ_VAL, },
++				{ 15, ST_MAGN_0_ODR_AVL_15HZ_VAL, },
++				{ 30, ST_MAGN_0_ODR_AVL_30HZ_VAL, },
++				{ 75, ST_MAGN_0_ODR_AVL_75HZ_VAL, },
++			},
++		},
++		.pw = {
++			.addr = ST_MAGN_0_PW_ADDR,
++			.mask = ST_MAGN_0_PW_MASK,
++			.value_on = ST_MAGN_0_PW_ON,
++			.value_off = ST_MAGN_0_PW_OFF,
++		},
++		.fs = {
++			.addr = ST_MAGN_0_FS_ADDR,
++			.mask = ST_MAGN_0_FS_MASK,
++			.fs_avl = {
++				[0] = {
++					.num = ST_MAGN_FS_AVL_1300MG,
++					.value = ST_MAGN_0_FS_AVL_1300_VAL,
++					.gain = ST_MAGN_0_FS_AVL_1300_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_1300_GAIN_Z,
++				},
++				[1] = {
++					.num = ST_MAGN_FS_AVL_1900MG,
++					.value = ST_MAGN_0_FS_AVL_1900_VAL,
++					.gain = ST_MAGN_0_FS_AVL_1900_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_1900_GAIN_Z,
++				},
++				[2] = {
++					.num = ST_MAGN_FS_AVL_2500MG,
++					.value = ST_MAGN_0_FS_AVL_2500_VAL,
++					.gain = ST_MAGN_0_FS_AVL_2500_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_2500_GAIN_Z,
++				},
++				[3] = {
++					.num = ST_MAGN_FS_AVL_4000MG,
++					.value = ST_MAGN_0_FS_AVL_4000_VAL,
++					.gain = ST_MAGN_0_FS_AVL_4000_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_4000_GAIN_Z,
++				},
++				[4] = {
++					.num = ST_MAGN_FS_AVL_4700MG,
++					.value = ST_MAGN_0_FS_AVL_4700_VAL,
++					.gain = ST_MAGN_0_FS_AVL_4700_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_4700_GAIN_Z,
++				},
++				[5] = {
++					.num = ST_MAGN_FS_AVL_5600MG,
++					.value = ST_MAGN_0_FS_AVL_5600_VAL,
++					.gain = ST_MAGN_0_FS_AVL_5600_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_5600_GAIN_Z,
++				},
++				[6] = {
++					.num = ST_MAGN_FS_AVL_8100MG,
++					.value = ST_MAGN_0_FS_AVL_8100_VAL,
++					.gain = ST_MAGN_0_FS_AVL_8100_GAIN_XY,
++					.gain2 = ST_MAGN_0_FS_AVL_8100_GAIN_Z,
++				},
++			},
++		},
++		.multi_read_bit = ST_MAGN_0_MULTIREAD_BIT,
++		.bootime = 2,
++	},
++	{
+ 		.wai = ST_MAGN_1_WAI_EXP,
+ 		.sensors_supported = {
+ 			[0] = LSM303DLHC_MAGN_DEV_NAME,
+@@ -361,8 +477,7 @@ static const struct iio_info magn_info = {
+ 	.write_raw = &st_magn_write_raw,
+ };
+ 
+-int st_magn_common_probe(struct iio_dev *indio_dev,
+-					struct st_sensors_platform_data *pdata)
++int st_magn_common_probe(struct iio_dev *indio_dev)
+ {
+ 	struct st_sensor_data *mdata = iio_priv(indio_dev);
+ 	int irq = mdata->get_irq_data_ready(indio_dev);
+@@ -370,6 +485,7 @@ int st_magn_common_probe(struct iio_dev *indio_dev,
+ 
+ 	indio_dev->modes = INDIO_DIRECT_MODE;
+ 	indio_dev->info = &magn_info;
++	mutex_init(&mdata->tb.buf_lock);
+ 
+ 	st_sensors_power_enable(indio_dev);
+ 
+@@ -387,7 +503,7 @@ int st_magn_common_probe(struct iio_dev *indio_dev,
+ 						&mdata->sensor->fs.fs_avl[0];
+ 	mdata->odr = mdata->sensor->odr.odr_avl[0].hz;
+ 
+-	err = st_sensors_init_sensor(indio_dev, pdata);
++	err = st_sensors_init_sensor(indio_dev, NULL);
+ 	if (err < 0)
+ 		return err;
+ 
+diff --git a/drivers/iio/magnetometer/st_magn_i2c.c b/drivers/iio/magnetometer/st_magn_i2c.c
+index 6892500..5311d8a 100644
+--- a/drivers/iio/magnetometer/st_magn_i2c.c
++++ b/drivers/iio/magnetometer/st_magn_i2c.c
+@@ -21,6 +21,10 @@
+ #ifdef CONFIG_OF
+ static const struct of_device_id st_magn_of_match[] = {
+ 	{
++		.compatible = "st,lsm303dlh-magn",
++		.data = LSM303DLH_MAGN_DEV_NAME,
++	},
++	{
+ 		.compatible = "st,lsm303dlhc-magn",
+ 		.data = LSM303DLHC_MAGN_DEV_NAME,
+ 	},
+@@ -51,12 +55,11 @@ static int st_magn_i2c_probe(struct i2c_client *client,
+ 		return -ENOMEM;
+ 
+ 	mdata = iio_priv(indio_dev);
+-	mdata->dev = &client->dev;
+ 	st_sensors_of_i2c_probe(client, st_magn_of_match);
+ 
+ 	st_sensors_i2c_configure(indio_dev, client, mdata);
+ 
+-	err = st_magn_common_probe(indio_dev, NULL);
++	err = st_magn_common_probe(indio_dev);
+ 	if (err < 0)
+ 		return err;
+ 
+@@ -72,6 +75,7 @@ static int st_magn_i2c_remove(struct i2c_client *client)
+ }
+ 
+ static const struct i2c_device_id st_magn_id_table[] = {
++	{ LSM303DLH_MAGN_DEV_NAME },
+ 	{ LSM303DLHC_MAGN_DEV_NAME },
+ 	{ LSM303DLM_MAGN_DEV_NAME },
+ 	{ LIS3MDL_MAGN_DEV_NAME },
+diff --git a/drivers/iio/magnetometer/st_magn_spi.c b/drivers/iio/magnetometer/st_magn_spi.c
+index a6143ea..7adacf1 100644
+--- a/drivers/iio/magnetometer/st_magn_spi.c
++++ b/drivers/iio/magnetometer/st_magn_spi.c
+@@ -29,11 +29,10 @@ static int st_magn_spi_probe(struct spi_device *spi)
+ 		return -ENOMEM;
+ 
+ 	mdata = iio_priv(indio_dev);
+-	mdata->dev = &spi->dev;
+ 
+ 	st_sensors_spi_configure(indio_dev, spi, mdata);
+ 
+-	err = st_magn_common_probe(indio_dev, NULL);
++	err = st_magn_common_probe(indio_dev);
+ 	if (err < 0)
+ 		return err;
+ 
