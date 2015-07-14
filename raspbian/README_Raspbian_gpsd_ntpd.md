@@ -14,7 +14,7 @@ Compute module (J5 header) | GPS Module
    GPIO 14 (UART TxD)      |     RX
    GPIO 15 (UART RxD)      |     TX
            GND             |    GND
-         3.3 VDC           |    VIN
+           5V0             |    VIN
          GPIO 18           |    PPS
 ```
 
