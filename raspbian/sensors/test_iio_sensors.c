@@ -416,7 +416,7 @@ int main(int argc, char *argv[])
 				 sensor->channels,
 				 sensor->num_channels);
                 }
-                printf("%8d   %2.1f", pressure, ((double)raw_temperature)/10);
+                printf("%8d %6.1f", pressure, ((double)raw_temperature)/10);
                 printf("\n");
             }
         }
