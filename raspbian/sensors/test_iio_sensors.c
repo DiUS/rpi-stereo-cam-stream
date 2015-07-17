@@ -44,9 +44,7 @@ struct iio_trigger_info
 
 
 static char *barometric_path = "/sys/bus/i2c/drivers/bmp085/1-0077/pressure0_input";
-static int barometric_fd = -1;
 static char *temperature_path = "/sys/bus/i2c/drivers/bmp085/1-0077/temp0_input";
-static int temperature_fd = -1;
 static struct iio_sensor_info accel = { .sensor_name = "lsm303dlhc_accel", .dev_fd = -1 };
 static struct iio_sensor_info magn  = { .sensor_name = "lsm303dlhc_magn", .dev_fd = -1 };
 static struct iio_sensor_info gyro  = { .sensor_name = "l3gd20", .dev_fd = -1 };
@@ -228,6 +226,22 @@ static void clean_up_iio_trigger(struct iio_trigger_info *trigger)
 }
 
 
+static int read_sensor_value(char *path)
+{
+    int fd;
+    int value = -1;
+    char tmp_buf[16];
+
+    fd = open(path, O_RDONLY | O_NONBLOCK);
+    if ((fd != -1) &&
+        (read(fd, tmp_buf, sizeof(tmp_buf)) > 0))
+        value = atoi(tmp_buf);
+    if (fd != -1)
+        close(fd);
+    return value;
+}
+
+
 void print2byte(int input, struct iio_channel_info *info)
 {
     // First swap if incorrect endian
@@ -301,21 +315,6 @@ void process_scan(char *data,
 int main(int argc, char *argv[])
 {
     int ret = 0;
-
-    barometric_fd = open(barometric_path, O_RDONLY | O_NONBLOCK);
-    if (barometric_fd == -1)
-    {
-        fprintf(stderr, "Failed to open %s\n", barometric_path);
-        ret = -errno;
-        goto error_ret;
-    }
-    temperature_fd = open(temperature_path, O_RDONLY | O_NONBLOCK);
-    if (temperature_fd == -1)
-    {
-        fprintf(stderr, "Failed to open %s\n", temperature_path);
-        ret = -errno;
-        goto error_ret;
-    }
 
     if ((ret = setup_iio_trigger(&timer[0])) != 0)
         goto error_ret;
@@ -397,6 +396,9 @@ int main(int argc, char *argv[])
         }
         if (num_rows)
         {
+            int pressure = read_sensor_value(barometric_path);
+            int raw_temperature = read_sensor_value(temperature_path);
+
             int j;
             for (j = 0; j < num_rows; j++)
             {
@@ -414,6 +416,7 @@ int main(int argc, char *argv[])
 				 sensor->channels,
 				 sensor->num_channels);
                 }
+                printf("%8d   %2.1f", pressure, ((double)raw_temperature)/10);
                 printf("\n");
             }
         }
@@ -427,10 +430,6 @@ int main(int argc, char *argv[])
     disconnect_trigger(&gyro);
 
 error_ret:
-    if (barometric_fd >= 0)
-        close(barometric_fd);
-    if (temperature_fd >= 0)
-        close(temperature_fd);
     clean_up_iio_device(&accel);
     clean_up_iio_device(&magn);
     clean_up_iio_device(&gyro);
