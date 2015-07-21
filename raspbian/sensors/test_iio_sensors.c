@@ -102,8 +102,7 @@ static int enable_xyz_scan_channels(const char *device_dir)
 error_ret:
     if (dp)
 	closedir(dp);
-    if (scan_el_dir)
-        free(scan_el_dir);
+    free(scan_el_dir);
     return ret;
 }
 
@@ -116,7 +115,7 @@ static int setup_iio_device(struct iio_sensor_info *info)
     if (info->dev_num < 0)
     {
         fprintf(stderr, "Failed to find device %s\n", info->sensor_name);
-        return -ENODEV;
+        return info->dev_num;
     }
     fprintf(stderr, "%s IIO device number: %d\n", info->sensor_name, info->dev_num);
     ret = asprintf(&info->dev_dir_name, "%siio:device%d", iio_dir, info->dev_num);
@@ -181,7 +180,7 @@ static int setup_iio_trigger(struct iio_trigger_info *trigger)
     if (trigger->trig_num < 0)
     {
         fprintf(stderr, "Failed to find trigger %s\n", trigger->trigger_name);
-        return -ENODEV;
+        return trigger->trig_num;
     }
     fprintf(stderr, "%s IIO trigger number: %d\n", trigger->trigger_name, trigger->trig_num);
     ret = asprintf(&trigger->trig_dir_name, "%strigger%d", iio_dir, trigger->trig_num);
@@ -224,8 +223,8 @@ static int start_iio_device(struct iio_sensor_info *info)
     info->dev_fd = open(info->buffer_access, O_RDONLY | O_NONBLOCK);
     if (info->dev_fd == -1)
     {
-        fprintf(stderr, "Failed to open %s\n", info->buffer_access);
         ret = -errno;
+        fprintf(stderr, "Failed to open %s\n", info->buffer_access);
         return ret;
     }
 
@@ -252,41 +251,23 @@ static void clean_up_iio_device(struct iio_sensor_info *info)
         close(info->dev_fd);
         info->dev_fd = -1;
     }
-    if (info->channels)
-    {
-        free(info->channels);
-        info->channels = NULL;
-    }
-    if (info->data)
-    {
-        free(info->data);
-        info->data = NULL;
-    }
-    if (info->dev_dir_name)
-    {
-        free(info->dev_dir_name);
-        info->dev_dir_name = NULL;
-    }
-    if (info->buf_dir_name)
-    {
-        free(info->buf_dir_name);
-        info->buf_dir_name = NULL;
-    }
-    if (info->buffer_access)
-    {
-        free(info->buffer_access);
-        info->buffer_access = NULL;
-    }
+    free(info->channels);
+    info->channels = NULL;
+    free(info->data);
+    info->data = NULL;
+    free(info->dev_dir_name);
+    info->dev_dir_name = NULL;
+    free(info->buf_dir_name);
+    info->buf_dir_name = NULL;
+    free(info->buffer_access);
+    info->buffer_access = NULL;
 }
 
 
 static void clean_up_iio_trigger(struct iio_trigger_info *trigger)
 {
-    if (trigger->trig_dir_name)
-    {
-        free(trigger->trig_dir_name);
-        trigger->trig_dir_name = NULL;
-    }
+    free(trigger->trig_dir_name);
+    trigger->trig_dir_name = NULL;
 }
 
 
@@ -306,31 +287,85 @@ static int read_sensor_value(char *path)
 }
 
 
-void print2byte(int input, struct iio_channel_info *info)
-{
-    // First swap if incorrect endian
-    if (info->be)
-        input = be16toh((uint16_t)input);
-    else
-        input = le16toh((uint16_t)input);
 
-    /*
-     * Shift before conversion to avoid sign extension
-     * of left aligned data
-     */
-    input = input >> info->shift;
-    if (info->is_signed) {
-        int16_t val = input;
-        val &= (1 << info->bits_used) - 1;
-        val = (int16_t)(val << (16 - info->bits_used)) >>
-                (16 - info->bits_used);
-        printf("% 10.5f ", ((float)val + info->offset)*info->scale);
-    } else {
-        uint16_t val = input;
-        val &= (1 << info->bits_used) - 1;
-        printf("% 10.5f ", ((float)val + info->offset)*info->scale);
-    }
+
+
+
+void print2byte(uint16_t input, struct iio_channel_info *info)
+{
+	/* First swap if incorrect endian */
+	if (info->be)
+		input = be16toh(input);
+	else
+		input = le16toh(input);
+
+	/*
+	 * Shift before conversion to avoid sign extension
+	 * of left aligned data
+	 */
+	input >>= info->shift;
+	input &= info->mask;
+	if (info->is_signed) {
+		int16_t val = (int16_t)(input << (16 - info->bits_used)) >>
+			      (16 - info->bits_used);
+		printf("% 10.5f ", ((float)val + info->offset) * info->scale);
+	} else {
+		printf("% 10.5f ", ((float)input + info->offset) * info->scale);
+	}
 }
+
+void print4byte(uint32_t input, struct iio_channel_info *info)
+{
+	/* First swap if incorrect endian */
+	if (info->be)
+		input = be32toh(input);
+	else
+		input = le32toh(input);
+
+	/*
+	 * Shift before conversion to avoid sign extension
+	 * of left aligned data
+	 */
+	input >>= info->shift;
+	input &= info->mask;
+	if (info->is_signed) {
+		int32_t val = (int32_t)(input << (32 - info->bits_used)) >>
+			      (32 - info->bits_used);
+		printf("% 10.5f ", ((float)val + info->offset) * info->scale);
+	} else {
+		printf("% 10.5f ", ((float)input + info->offset) * info->scale);
+	}
+}
+
+void print8byte(uint64_t input, struct iio_channel_info *info)
+{
+	/* First swap if incorrect endian */
+	if (info->be)
+		input = be64toh(input);
+	else
+		input = le64toh(input);
+
+	/*
+	 * Shift before conversion to avoid sign extension
+	 * of left aligned data
+	 */
+	input >>= info->shift;
+	input &= info->mask;
+	if (info->is_signed) {
+		int64_t val = (int64_t)(input << (64 - info->bits_used)) >>
+			      (64 - info->bits_used);
+		/* special case for timestamp */
+		if (info->scale == 1.0f && info->offset == 0.0f)
+			printf("%" PRId64 " ", val);
+		else
+			printf("% 10.5f ",
+			       ((float)val + info->offset) * info->scale);
+	} else {
+		printf("% 10.5f ", ((float)input + info->offset) * info->scale);
+	}
+}
+
+
 /**
  * process_scan() - print out the values in SI units
  * @data:		pointer to the start of the scan
@@ -351,24 +386,10 @@ void process_scan(char *data,
                 print2byte(*(uint16_t *)(data + channels[k].location), &channels[k]);
                 break;
             case 4:
-                if (!channels[k].is_signed)
-                {
-                    uint32_t val = *(uint32_t *)(data + channels[k].location);
-                    printf("% 10.5f ", ((float)val + channels[k].offset)*channels[k].scale);
-                }
+                print4byte(*(uint32_t *)(data + channels[k].location), &channels[k]);
                 break;
             case 8:
-                if (channels[k].is_signed)
-                {
-                    int64_t val = *(int64_t *)(data + channels[k].location);
-                    if ((val >> channels[k].bits_used) & 1)
-                        val = (val & channels[k].mask) | ~channels[k].mask;
-                    // special case for timestamp
-                    if (channels[k].scale == 1.0f && channels[k].offset == 0.0f)
-                        printf("%" PRId64 " ", val);
-                    else
-                        printf("% 10.5f ", ((float)val + channels[k].offset)*channels[k].scale);
-                }
+                print8byte(*(uint64_t *)(data + channels[k].location), &channels[k]);
                 break;
             default:
                 break;
@@ -435,7 +456,7 @@ int main(int argc, char *argv[])
                 sensor->read_size = read(sensor->dev_fd, sensor->data, BUFFER_LENGTH*sensor->scan_size);
 		if (sensor->read_size < 0)
                 {
-                    if (errno == -EAGAIN)
+                    if (errno == EAGAIN)
                         continue;
                     else
                     {

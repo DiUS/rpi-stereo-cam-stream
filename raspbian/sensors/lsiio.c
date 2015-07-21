@@ -55,7 +55,7 @@ static int dump_channels(const char *dev_dir_name)
 			printf("   %-10s\n", ent->d_name);
 		}
 
-	return 0;
+	return (closedir(dp) == -1) ? -errno : 0;
 }
 
 static int dump_one_device(const char *dev_dir_name)
@@ -107,7 +107,12 @@ static void dump_devices(void)
 	while (ent = readdir(dp), ent != NULL) {
 		if (check_prefix(ent->d_name, type_device)) {
 			char *dev_dir_name;
-			asprintf(&dev_dir_name, "%s%s", iio_dir, ent->d_name);
+			if (asprintf(&dev_dir_name, "%s%s", iio_dir,
+				     ent->d_name) < 0) {
+				printf("Memory allocation failed\n");
+				goto error_close_dir;
+			}
+
 			dump_one_device(dev_dir_name);
 			free(dev_dir_name);
 			if (verblevel >= VERBLEVEL_SENSORS)
@@ -118,11 +123,17 @@ static void dump_devices(void)
 	while (ent = readdir(dp), ent != NULL) {
 		if (check_prefix(ent->d_name, type_trigger)) {
 			char *dev_dir_name;
-			asprintf(&dev_dir_name, "%s%s", iio_dir, ent->d_name);
+			if (asprintf(&dev_dir_name, "%s%s", iio_dir,
+				     ent->d_name) < 0) {
+				printf("Memory allocation failed\n");
+				goto error_close_dir;
+			}
+
 			dump_one_trigger(dev_dir_name);
 			free(dev_dir_name);
 		}
 	}
+error_close_dir:
 	closedir(dp);
 }
 
