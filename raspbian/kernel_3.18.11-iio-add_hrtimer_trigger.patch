@@ -1,6 +1,6 @@
-commit 24f2c45d1127e273385fcd2ce401534005866480
+commit 6fdbeb6580dedececf07ea7caf0ef7be82e1ecfc
 Author: Joo Aun Saw <jasaw@dius.com.au>
-Date:   Fri Jul 17 02:04:46 2015 +1000
+Date:   Tue Jul 21 11:27:44 2015 +1000
 
     iio: added high resolution timer based trigger
 
@@ -37,7 +37,7 @@ index 0694dae..fe06eb5 100644
  obj-$(CONFIG_IIO_SYSFS_TRIGGER) += iio-trig-sysfs.o
 diff --git a/drivers/iio/trigger/iio-trig-hrtimer.c b/drivers/iio/trigger/iio-trig-hrtimer.c
 new file mode 100644
-index 0000000..c7245b6
+index 0000000..e1ba760
 --- /dev/null
 +++ b/drivers/iio/trigger/iio-trig-hrtimer.c
 @@ -0,0 +1,275 @@
@@ -196,10 +196,10 @@ index 0000000..c7245b6
 +	return count;
 +}
 +
-+static DEVICE_ATTR(set_delay, S_IWUSR | S_IRUSR, iio_trig_hrtimer_get_delay, iio_trig_hrtimer_set_delay);
++static DEVICE_ATTR(delay_ns, S_IWUSR | S_IRUSR, iio_trig_hrtimer_get_delay, iio_trig_hrtimer_set_delay);
 +
 +static struct attribute *iio_hrtimer_trigger_attrs[] = {
-+	&dev_attr_set_delay.attr,
++	&dev_attr_delay_ns.attr,
 +	NULL,
 +};
 +

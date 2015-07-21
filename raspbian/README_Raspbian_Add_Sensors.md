@@ -129,13 +129,15 @@ vcdbg log msg
 
     ```
     echo 0 > /sys/bus/iio/devices/iio_hrtimer_trigger/add_trigger
+    echo 1 > /sys/bus/iio/devices/iio_hrtimer_trigger/add_trigger
+    echo 2 > /sys/bus/iio/devices/iio_hrtimer_trigger/add_trigger
     ```
 
 * Optional: Change the hrtimer trigger frequency. Unit is in nanoseconds. Default is 10 Hz.
 
     ```
-    echo 10000000 > devices/trigger0/set_delay
-    cat devices/trigger0/set_delay
+    echo 10000000 > devices/trigger0/delay_ns
+    cat devices/trigger0/delay_ns
     ```
 
 * List all IIO devices and triggers.

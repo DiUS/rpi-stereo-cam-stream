@@ -123,7 +123,7 @@ static int setup_iio_trigger(struct iio_trigger_info *trigger)
     ret = asprintf(&trigger->trig_dir_name, "%strigger%d", iio_dir, trigger->trig_num);
     if (ret < 0)
         return -ENOMEM;
-    ret = write_sysfs_int("set_delay", trigger->trig_dir_name, IIO_SAMPLE_INTERVAL_NS);
+    ret = write_sysfs_int("delay_ns", trigger->trig_dir_name, IIO_SAMPLE_INTERVAL_NS);
     if (ret < 0)
         return ret;
     return 0;
