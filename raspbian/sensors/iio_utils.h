@@ -115,13 +115,9 @@ int build_channel_array(const char *device_dir,
  **/
 int find_type_by_name(const char *name, const char *type);
 
-int _write_sysfs_int(char *filename, char *basedir, int val, int verify);
+int write_sysfs_int(const char *filename, char *basedir, int val);
 
-int write_sysfs_int(char *filename, char *basedir, int val);
-
-int write_sysfs_int_and_verify(char *filename, char *basedir, int val);
-
-int _write_sysfs_string(char *filename, char *basedir, char *val, int verify);
+int write_sysfs_int_and_verify(const char *filename, char *basedir, int val);
 
 /**
  * write_sysfs_string_and_verify() - string write, readback and verify
@@ -129,9 +125,9 @@ int _write_sysfs_string(char *filename, char *basedir, char *val, int verify);
  * @basedir: the sysfs directory in which the file is to be found
  * @val: the string to write
  **/
-int write_sysfs_string_and_verify(char *filename, char *basedir, char *val);
+int write_sysfs_string_and_verify(const char *filename, char *basedir, char *val);
 
-int write_sysfs_string(char *filename, char *basedir, char *val);
+int write_sysfs_string(const char *filename, char *basedir, char *val);
 
 int read_sysfs_posint(char *filename, char *basedir);
 

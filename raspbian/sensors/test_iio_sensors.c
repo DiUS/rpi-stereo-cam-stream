@@ -67,6 +67,47 @@ static void handle_terminate_signal(int sig)
 }
 
 
+static int enable_xyz_scan_channels(const char *device_dir)
+{
+    DIR *dp = NULL;
+    const struct dirent *ent = NULL;
+    char *scan_el_dir = NULL;
+    int ret = 0;
+
+    if (asprintf(&scan_el_dir, FORMAT_SCAN_ELEMENTS_DIR, device_dir) < 0)
+    {
+        ret = -ENOMEM;
+        goto error_ret;
+    }
+    dp = opendir(scan_el_dir);
+    if (dp == NULL)
+    {
+        ret = -errno;
+        goto error_ret;
+    }
+    while (ent = readdir(dp), ent != NULL)
+    {
+        const char *d_name = ent->d_name + strlen(ent->d_name) - strlen("_x_en");
+        if ((d_name >= ent->d_name) &&
+            ((strcmp(d_name, "_x_en") == 0) ||
+             (strcmp(d_name, "_y_en") == 0) ||
+             (strcmp(d_name, "_z_en") == 0)))
+        {
+            ret = write_sysfs_int(ent->d_name, scan_el_dir, 1);
+            if (ret < 0)
+                goto error_ret;
+        }
+    }
+
+error_ret:
+    if (dp)
+	closedir(dp);
+    if (scan_el_dir)
+        free(scan_el_dir);
+    return ret;
+}
+
+
 static int setup_iio_device(struct iio_sensor_info *info)
 {
     int ret;
@@ -88,6 +129,12 @@ static int setup_iio_device(struct iio_sensor_info *info)
     if (ret < 0)
         return -ENOMEM;
 
+    ret = enable_xyz_scan_channels(info->dev_dir_name);
+    if (ret < 0)
+    {
+        fprintf(stderr, "Failed to enable %s scan elements\n", info->sensor_name);
+        return ret;
+    }
     ret = build_channel_array(info->dev_dir_name, &info->channels, &info->num_channels);
     if (ret)
     {
@@ -105,6 +152,23 @@ static int setup_iio_device(struct iio_sensor_info *info)
     if (ret < 0)
         return ret;
 
+    return 0;
+}
+
+
+static int create_trigger(int trigger_id)
+{
+    char *add_trigger_dir = NULL;
+    int ret;
+
+    ret = asprintf(&add_trigger_dir, "%siio_hrtimer_trigger", iio_dir);
+    if (ret < 0)
+        return -ENOMEM;
+
+    ret = write_sysfs_int("add_trigger", add_trigger_dir, trigger_id);
+    free(add_trigger_dir);
+    if (ret < 0)
+        return ret;
     return 0;
 }
 
@@ -315,6 +379,10 @@ void process_scan(char *data,
 int main(int argc, char *argv[])
 {
     int ret = 0;
+
+    create_trigger(0);
+    create_trigger(1);
+    create_trigger(2);
 
     if ((ret = setup_iio_trigger(&timer[0])) != 0)
         goto error_ret;
