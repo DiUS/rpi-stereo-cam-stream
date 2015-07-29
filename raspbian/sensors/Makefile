@@ -7,7 +7,7 @@ LDFLAGS += -lm
 
 all: test_iio_sensors lsiio generic_buffer
 
-test_iio_sensors: test_iio_sensors.o iio_utils.o orientation.o
+test_iio_sensors: test_iio_sensors.o iio_utils.o calib.o orientation.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
 lsiio: lsiio.o iio_utils.o

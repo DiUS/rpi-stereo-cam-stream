@@ -11,26 +11,19 @@
 #include <endian.h>
 #include <inttypes.h>
 #include <signal.h>
+#include <getopt.h>
 
 #include "iio_utils.h"
 #include "orientation.h"
+#include "calib.h"
 
-
-struct calibration_data
-{
-    float x_offset;
-    float y_offset;
-    float z_offset;
-    float x_scale;
-    float y_scale;
-    float z_scale;
-};
 
 struct iio_sensor_info
 {
     char *sensor_name;
     int sampling_frequency;
     int channel_index_to_axis_map[3];
+    const char *sample_out_file;
     struct calibration_data *calibration;
     struct iio_channel_info *channels;
     int num_channels;
@@ -73,13 +66,6 @@ static struct calibration_data magn_calibration =
     .x_scale  = 0.972343,
     .y_scale  = 0.949530,
     .z_scale  = 1.088845,
-
-    //.x_offset = 0.019995,
-    //.y_offset = 0.338150,
-    //.z_offset = 0.092820,
-    //.x_scale  = 0.995717,
-    //.y_scale  = 1.101782,
-    //.z_scale  = 0.919052,
 };
 static struct calibration_data gyro_calibration =
 {
@@ -118,6 +104,10 @@ static struct iio_trigger_info timer[] =
     { .trigger_name = "hrtimertrig2" },
 };
 static int terminated = 0;
+static const char *progname = "";
+static const char *calibration_data_file = "/etc/default/rpi-stereo-cam-stream-calib.conf";
+static int calibration_mode = 0;
+static int raw_mode = 0;
 
 
 #define min(a,b) ( (a < b) ? a : b )
@@ -207,6 +197,9 @@ static int setup_iio_device(struct iio_sensor_info *info)
 {
     int ret;
 
+    if (calibration_mode && (info->sample_out_file == NULL))
+        return 0;
+
     info->dev_num = find_type_by_name(info->sensor_name, "iio:device");
     if (info->dev_num < 0)
     {
@@ -242,7 +235,8 @@ static int setup_iio_device(struct iio_sensor_info *info)
         fprintf(stderr, "Problem reading %s scan element information\n", info->sensor_name);
         return ret;
     }
-    apply_calibration_data(info->channels, info->num_channels, info->calibration, info->channel_index_to_axis_map);
+    if (!calibration_mode)
+        apply_calibration_data(info->channels, info->num_channels, info->calibration, info->channel_index_to_axis_map);
 
     info->scan_size = size_from_channelarray(info->channels, info->num_channels);
     info->data = malloc(info->scan_size * BUFFER_LENGTH);
@@ -303,6 +297,9 @@ static int assign_trigger(struct iio_sensor_info *sensor, struct iio_trigger_inf
 {
     int ret;
 
+    if (calibration_mode && (sensor->sample_out_file == NULL))
+        return 0;
+
     fprintf(stderr, "%s - %s\n", sensor->dev_dir_name, trigger->trigger_name);
     ret = write_sysfs_string_and_verify("trigger/current_trigger",
                                         sensor->dev_dir_name,
@@ -319,6 +316,9 @@ static int assign_trigger(struct iio_sensor_info *sensor, struct iio_trigger_inf
 static int start_iio_device(struct iio_sensor_info *info)
 {
     int ret;
+
+    if (calibration_mode && (info->sample_out_file == NULL))
+        return 0;
 
     // Enable the buffer
     ret = write_sysfs_int("enable", info->buf_dir_name, 1);
@@ -508,207 +508,101 @@ static void populate_sensor_axis(char *data,
 }
 
 
-static void print_orientation(void)
-{
-    while (!terminated)
-    {
-        struct pollfd fds[] =
-        {
-            { .fd = accel.dev_fd, .events = POLLIN },
-            { .fd =  magn.dev_fd, .events = POLLIN },
-            { .fd =  gyro.dev_fd, .events = POLLIN },
-        };
-        poll(fds, sizeof(fds)/sizeof(struct pollfd), -1);
-
-        int i;
-        for (i = 0; i < sizeof(fds)/sizeof(struct pollfd); i++)
-        {
-            if ((fds[i].revents & POLLIN) != 0)
-            {
-                struct iio_sensor_info *sensor;
-                switch (i)
-                {
-                    case 0: sensor = &accel; break;
-                    case 1: sensor =  &magn; break;
-                    case 2: sensor =  &gyro; break;
-                    default: continue;
-                }
-                sensor->read_size = read(sensor->dev_fd, sensor->data, BUFFER_LENGTH*sensor->scan_size);
-		if (sensor->read_size < 0)
-                {
-                    if (errno == EAGAIN)
-                        continue;
-                    else
-                    {
-                        terminated = 1;
-                        break;
-                    }
-		}
-            }
-        }
-
-        int num_rows = BUFFER_LENGTH;
-        for (i = 0; i < sizeof(fds)/sizeof(struct pollfd); i++)
-        {
-            struct iio_sensor_info *sensor;
-            switch (i)
-            {
-                case 0: sensor = &accel; break;
-                case 1: sensor =  &magn; break;
-                case 2: sensor =  &gyro; break;
-                default: continue;
-            }
-            if (sensor->read_size > 0)
-                num_rows = min(num_rows, sensor->read_size/sensor->scan_size);
-            else
-                num_rows = 0;
-        }
-        if (num_rows)
-        {
-            struct sensor_axis_t accel_axis;
-            struct sensor_axis_t magn_axis;
-            struct sensor_axis_t gyro_axis;
-            struct sensor_axis_t *axis;
-            int j;
-            for (j = 0; j < num_rows; j++)
-            {
-                for (i = 0; i < sizeof(fds)/sizeof(struct pollfd); i++)
-                {
-                    struct iio_sensor_info *sensor;
-                    switch (i)
-                    {
-                        case 0: sensor = &accel; axis = &accel_axis; break;
-                        case 1: sensor =  &magn; axis =  &magn_axis; break;
-                        case 2: sensor =  &gyro; axis =  &gyro_axis; break;
-                        default: continue;
-                    }
-                    populate_sensor_axis(sensor->data + sensor->scan_size * j,
-				         sensor->channels,
-				         sensor->num_channels,
-                                         sensor->channel_index_to_axis_map,
-                                         axis);
-                }
-                static int orientation_initialized = 0;
-                if (!orientation_initialized)
-                {
-                    orientation_init(&accel_axis, &magn_axis);
-                    orientation_initialized = 1;
-                    continue;
-                }
-                //orientation_show(&accel_axis, &gyro_axis, &magn_axis, 1.0*IIO_SAMPLE_INTERVAL_NS/1000000000);
-                orientation_show(&accel_axis, &gyro_axis, &magn_axis);
-            }
-        }
-    }
-}
+//static void print_orientation(void)
+//{
+//    while (!terminated)
+//    {
+//        struct pollfd fds[] =
+//        {
+//            { .fd = accel.dev_fd, .events = POLLIN },
+//            { .fd =  magn.dev_fd, .events = POLLIN },
+//            { .fd =  gyro.dev_fd, .events = POLLIN },
+//        };
+//        poll(fds, sizeof(fds)/sizeof(struct pollfd), -1);
+//
+//        int i;
+//        for (i = 0; i < sizeof(fds)/sizeof(struct pollfd); i++)
+//        {
+//            if ((fds[i].revents & POLLIN) != 0)
+//            {
+//                struct iio_sensor_info *sensor;
+//                switch (i)
+//                {
+//                    case 0: sensor = &accel; break;
+//                    case 1: sensor =  &magn; break;
+//                    case 2: sensor =  &gyro; break;
+//                    default: continue;
+//                }
+//                sensor->read_size = read(sensor->dev_fd, sensor->data, BUFFER_LENGTH*sensor->scan_size);
+//		if (sensor->read_size < 0)
+//                {
+//                    if (errno == EAGAIN)
+//                        continue;
+//                    else
+//                    {
+//                        terminated = 1;
+//                        break;
+//                    }
+//		}
+//            }
+//        }
+//
+//        int num_rows = BUFFER_LENGTH;
+//        for (i = 0; i < sizeof(fds)/sizeof(struct pollfd); i++)
+//        {
+//            struct iio_sensor_info *sensor;
+//            switch (i)
+//            {
+//                case 0: sensor = &accel; break;
+//                case 1: sensor =  &magn; break;
+//                case 2: sensor =  &gyro; break;
+//                default: continue;
+//            }
+//            if (sensor->read_size > 0)
+//                num_rows = min(num_rows, sensor->read_size/sensor->scan_size);
+//            else
+//                num_rows = 0;
+//        }
+//        if (num_rows)
+//        {
+//            struct sensor_axis_t accel_axis;
+//            struct sensor_axis_t magn_axis;
+//            struct sensor_axis_t gyro_axis;
+//            struct sensor_axis_t *axis;
+//            int j;
+//            for (j = 0; j < num_rows; j++)
+//            {
+//                for (i = 0; i < sizeof(fds)/sizeof(struct pollfd); i++)
+//                {
+//                    struct iio_sensor_info *sensor;
+//                    switch (i)
+//                    {
+//                        case 0: sensor = &accel; axis = &accel_axis; break;
+//                        case 1: sensor =  &magn; axis =  &magn_axis; break;
+//                        case 2: sensor =  &gyro; axis =  &gyro_axis; break;
+//                        default: continue;
+//                    }
+//                    populate_sensor_axis(sensor->data + sensor->scan_size * j,
+//				         sensor->channels,
+//				         sensor->num_channels,
+//                                         sensor->channel_index_to_axis_map,
+//                                         axis);
+//                }
+//                static int orientation_initialized = 0;
+//                if (!orientation_initialized)
+//                {
+//                    orientation_init(&accel_axis, &magn_axis);
+//                    orientation_initialized = 1;
+//                    continue;
+//                }
+//                //orientation_show(&accel_axis, &gyro_axis, &magn_axis, 1.0*IIO_SAMPLE_INTERVAL_NS/1000000000);
+//                orientation_show(&accel_axis, &gyro_axis, &magn_axis);
+//            }
+//        }
+//    }
+//}
 
 //------------------------------------------------------------------------------
-
-//static void print2byte(FILE *fp, uint16_t input, struct iio_channel_info *info)
-//{
-//    /* First swap if incorrect endian */
-//    if (info->be)
-//        input = be16toh(input);
-//    else
-//        input = le16toh(input);
-//
-//    /*
-//     * Shift before conversion to avoid sign extension
-//     * of left aligned data
-//     */
-//    input >>= info->shift;
-//    input &= info->mask;
-//
-//    if (info->is_signed) {
-//        int16_t val = (int16_t)(input << (16 - info->bits_used)) >>
-//                      (16 - info->bits_used);
-//        fprintf(fp, "% 10.5f ", ((double)val + info->offset) * info->scale);
-//    } else {
-//        fprintf(fp, "% 10.5f ", ((double)input + info->offset) * info->scale);
-//    }
-//}
-//
-//static void print4byte(FILE *fp, uint32_t input, struct iio_channel_info *info)
-//{
-//    /* First swap if incorrect endian */
-//    if (info->be)
-//        input = be32toh(input);
-//    else
-//        input = le32toh(input);
-//
-//    /*
-//     * Shift before conversion to avoid sign extension
-//     * of left aligned data
-//     */
-//    input >>= info->shift;
-//    input &= info->mask;
-//    if (info->is_signed) {
-//        int32_t val = (int32_t)(input << (32 - info->bits_used)) >>
-//                      (32 - info->bits_used);
-//        fprintf(fp, "% 10.5f ", ((double)val + info->offset) * info->scale);
-//    } else {
-//        fprintf(fp, "% 10.5f ", ((double)input + info->offset) * info->scale);
-//    }
-//}
-//
-//static void print8byte(FILE *fp, uint64_t input, struct iio_channel_info *info)
-//{
-//    /* First swap if incorrect endian */
-//    if (info->be)
-//        input = be64toh(input);
-//    else
-//        input = le64toh(input);
-//
-//    /*
-//     * Shift before conversion to avoid sign extension
-//     * of left aligned data
-//     */
-//    input >>= info->shift;
-//    input &= info->mask;
-//    if (info->is_signed) {
-//        int64_t val = (int64_t)(input << (64 - info->bits_used)) >>
-//                      (64 - info->bits_used);
-//        /* special case for timestamp */
-//        if (info->scale == 1.0f && info->offset == 0.0f)
-//                fprintf(fp, "%" PRId64 " ", val);
-//        else
-//                fprintf(fp, "% 10.5f ",
-//                       ((double)val + info->offset) * info->scale);
-//    } else {
-//        fprintf(fp, "% 10.5f ", ((double)input + info->offset) * info->scale);
-//    }
-//}
-//
-//
-///**
-// * process_scan() - print out the values in SI units
-// * @data:		pointer to the start of the scan
-// * @channels:		information about the channels. Note
-// *  size_from_channelarray must have been called first to fill the
-// *  location offsets.
-// * @num_channels:	number of channels
-// **/
-//static void process_scan(FILE *fp, char *data,
-//		         struct iio_channel_info *channels,
-//		         int num_channels)
-//{
-//    int k;
-//    for (k = 0; k < num_channels; k++)
-//        switch (channels[k].bytes) {
-//            // only a few cases implemented so far
-//            case 2:
-//                print2byte(fp, *(uint16_t *)(data + channels[k].location), &channels[k]);
-//                break;
-//            case 4:
-//                print4byte(fp, *(uint32_t *)(data + channels[k].location), &channels[k]);
-//                break;
-//            case 8:
-//                print8byte(fp, *(uint64_t *)(data + channels[k].location), &channels[k]);
-//                break;
-//            default:
-//                break;
-//        }
-//}
 
 static void print_raw_axis(FILE *fp, struct sensor_axis_t *axis)
 {
@@ -816,12 +710,20 @@ static void print_raw_values(void)
 }
 
 
-static void calibrate_sensor(struct iio_sensor_info *sensor, const char *output_file)
+static int calibrate_sensor(struct iio_sensor_info *sensor)
 {
+    if (sensor->sample_out_file == NULL)
+        return 0;
+
+    int ret = 0;
     int num_lines = 0;
-    FILE *fp = fopen(output_file, "w");
+    FILE *fp = fopen(sensor->sample_out_file, "w");
     if (fp == NULL)
-        return;
+    {
+        ret = -errno;
+        fprintf(stderr, "Failed to open %s\n", sensor->sample_out_file);
+        return ret;
+    }
 
     while (!terminated)
     {
@@ -842,6 +744,7 @@ static void calibrate_sensor(struct iio_sensor_info *sensor, const char *output_
                     continue;
                 else
                 {
+                    ret = -errno;
                     terminated = 1;
                     break;
                 }
@@ -875,24 +778,82 @@ static void calibrate_sensor(struct iio_sensor_info *sensor, const char *output_
     }
 
     fclose(fp);
+    return ret;
 }
 
 //------------------------------------------------------------------------------
 
+void syntax(void)
+{
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "%s [options]\n", progname);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "options:\n");
+    fprintf(stderr, " -M <path>     Calibrate magnetometer mode, write samples to <path>\n");
+    fprintf(stderr, " -A <path>     Calibrate accelerometer mode, write samples to <path>\n");
+    fprintf(stderr, " -G <path>     Calibrate gyroscope mode, write samples to <path>\n");
+    fprintf(stderr, " -c <path>     Calibration data file (default %d)\n", calibration_data_file);
+    fprintf(stderr, " -r            Raw data mode\n");
+    fprintf(stderr, " -h            display this information\n");
+    fprintf(stderr, "\n");
+    exit(EXIT_FAILURE);
+}
+
+
 int main(int argc, char *argv[])
 {
     int ret = 0;
+    int opt;
 
-    create_trigger(0);
-    create_trigger(1);
-    create_trigger(2);
+    progname = argv[0];
 
-    if ((ret = setup_iio_trigger(&timer[0])) != 0)
-        goto error_ret;
-    if ((ret = setup_iio_trigger(&timer[1])) != 0)
-        goto error_ret;
-    if ((ret = setup_iio_trigger(&timer[2])) != 0)
-        goto error_ret;
+    while ((opt = getopt (argc, argv, "M:A:G:c:rh")) != -1)
+    {
+        switch (opt)
+        {
+            case 'A': accel.sample_out_file = optarg; if (strlen(accel.sample_out_file) == 0) syntax(); break;
+            case 'M': magn.sample_out_file = optarg; if (strlen(magn.sample_out_file) == 0) syntax(); break;
+            case 'G': gyro.sample_out_file = optarg; if (strlen(gyro.sample_out_file) == 0) syntax(); break;
+            case 'c': calibration_data_file = optarg; if (strlen(calibration_data_file) == 0) syntax(); break;
+            case 'r': raw_mode = 1; break;
+            case 'h': // fall through
+            default:
+                syntax();
+                break;
+        }
+    }
+
+    if (read_calibration_from_file(calibration_data_file, &accel_calibration,
+                                   &magn_calibration, &gyro_calibration))
+        fprintf(stderr, "Warning: no calibration data available\n");
+
+    if ((accel.sample_out_file != NULL) ||
+        (magn.sample_out_file != NULL) ||
+        (gyro.sample_out_file != NULL))
+        calibration_mode = 1;
+
+    if ((!calibration_mode) || accel.sample_out_file)
+        create_trigger(0);
+    if ((!calibration_mode) || magn.sample_out_file)
+        create_trigger(1);
+    if ((!calibration_mode) || gyro.sample_out_file)
+        create_trigger(2);
+
+    if ((!calibration_mode) || accel.sample_out_file)
+    {
+        if ((ret = setup_iio_trigger(&timer[0])) != 0)
+            goto error_ret;
+    }
+    if ((!calibration_mode) || magn.sample_out_file)
+    {
+        if ((ret = setup_iio_trigger(&timer[1])) != 0)
+            goto error_ret;
+    }
+    if ((!calibration_mode) || gyro.sample_out_file)
+    {
+        if ((ret = setup_iio_trigger(&timer[2])) != 0)
+            goto error_ret;
+    }
 
     if (((ret = setup_iio_device(&accel)) != 0) ||
         ((ret = setup_iio_device(&magn)) != 0) ||
@@ -912,10 +873,22 @@ int main(int argc, char *argv[])
         ((ret = start_iio_device(&gyro)) != 0))
         goto error_ret;
 
-    //print_raw_values();
-    //print_orientation();
-    calibrate_sensor(&magn, "/tmp/magn_cal.txt");
-    //calibrate_sensor(&accel, "/tmp/accel_cal.txt");
+    if (calibration_mode)
+    {
+        if ((!terminated) && (calibrate_sensor(&magn) == 0))
+            terminated = 0;
+        if ((!terminated) && (calibrate_sensor(&accel) == 0))
+            terminated = 0;
+        if ((!terminated) && (calibrate_sensor(&gyro) == 0))
+            terminated = 0;
+    }
+    else
+    {
+        if (raw_mode)
+            print_raw_values();
+        //else
+        //    print_orientation();
+    }
 
     stop_iio_device(&accel);
     stop_iio_device(&magn);
