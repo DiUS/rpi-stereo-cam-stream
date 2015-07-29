@@ -72,7 +72,6 @@ static void process_key_value(const char *key, const char *value,
         if (strcmp(map[i].key, key) == 0)
         {
             *map[i].value = v;
-            printf("%s = %f\n", map[i].key, *map[i].value);
             return;
         }
     }

@@ -10,10 +10,11 @@ struct sensor_axis_t
 };
 
 
-void orientation_init(struct sensor_axis_t *accel, struct sensor_axis_t *magn);
 void orientation_show(struct sensor_axis_t *accel,
                       struct sensor_axis_t *gyro,
-                      struct sensor_axis_t *magn);
+                      struct sensor_axis_t *magn,
+                      int pressure,
+                      double temperature);
 
 
 #endif // _ORIENTATION_H_

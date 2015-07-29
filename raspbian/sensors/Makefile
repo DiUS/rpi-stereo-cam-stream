@@ -3,7 +3,7 @@ VPATH=$(SRC)
 endif
 
 CFLAGS += -I. -I$(SRC) -Wall -std=c99 -D_BSD_SOURCE=1 -D_GNU_SOURCE=1
-LDFLAGS += -lm
+LDFLAGS += -lm -lrt
 
 all: test_iio_sensors lsiio generic_buffer
 

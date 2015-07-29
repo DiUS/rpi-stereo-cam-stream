@@ -128,14 +128,16 @@ static double heading(struct sensor_axis_t *magn,
 }
 
 
-void orientation_init(struct sensor_axis_t *accel, struct sensor_axis_t *magn)
-{
-}
+//void orientation_init(struct sensor_axis_t *accel, struct sensor_axis_t *magn)
+//{
+//}
 
 
 void orientation_show(struct sensor_axis_t *accel,
                       struct sensor_axis_t *gyro,
-                      struct sensor_axis_t *magn)
+                      struct sensor_axis_t *magn,
+                      int pressure,
+                      double temperature)
 {
     double roll;
     double pitch;
@@ -174,13 +176,11 @@ void orientation_show(struct sensor_axis_t *accel,
 
     static int print_rate_divider = 0;
     print_rate_divider++;
-    if (print_rate_divider >= 3)
+    if (print_rate_divider >= 6)
     {
         print_rate_divider = 0;
-        printf("% 7.2f % 7.2f % 7.2f\n",
-               roll, pitch, yaw);
-        //printf("% 7.2f % 7.2f % 7.2f | % 7.2f\n",
-        //       roll, pitch, yaw,
-        //       yaw_raw);
+        fprintf(stdout, "% 7.2f % 7.2f % 7.2f ", roll, pitch, yaw);
+        fprintf(stdout, "%8d %6.1f", pressure, temperature);
+        fprintf(stdout, "\n");
     }
 }
