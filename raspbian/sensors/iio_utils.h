@@ -115,7 +115,7 @@ int size_from_channelarray(struct iio_channel_info *channels, int num_channels);
  * @ci_array: the iio_channel_info array to be sorted
  * @cnt: the amount of array elements
  **/
-void bsort_channel_array_by_index(struct iio_channel_info **ci_array, int cnt);
+void bsort_channel_array_by_index(struct iio_channel_info *ci_array, int cnt);
 
 /**
  * build_channel_array() - function to figure out what channels are present
