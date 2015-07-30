@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "orientation.h"
+#include "ahrs.h"
 
 // restrict roll to ±90deg to avoid gimbal lock
-#define RESTRICT_PITCH
+//#define RESTRICT_PITCH
 
 static inline double to_degrees(double radians)
 {
@@ -68,7 +68,7 @@ static void get_pitch_roll(struct sensor_axis_t *accel, double *roll, double *pi
 //    *pitch = to_degrees(atan2(accel->x, accel->z));
 //#endif
     *roll = to_degrees(atan(accel->y / sqrt(accel->x * accel->x + accel->z * accel->z)));
-    *pitch = to_degrees(atan(accel->x / sqrt(accel->y * accel->y + accel->z * accel->z)));
+    *pitch = to_degrees(atan(-accel->x / sqrt(accel->y * accel->y + accel->z * accel->z)));
 }
 
 

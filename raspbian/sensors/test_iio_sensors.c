@@ -15,7 +15,7 @@
 #include <time.h>
 
 #include "iio_utils.h"
-#include "orientation.h"
+#include "ahrs.h"
 #include "calib.h"
 
 

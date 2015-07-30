@@ -1,5 +1,5 @@
-#ifndef _ORIENTATION_H_
-#define _ORIENTATION_H_
+#ifndef _AHRS_H_
+#define _AHRS_H_
 
 
 struct sensor_axis_t
@@ -17,4 +17,4 @@ void orientation_show(struct sensor_axis_t *accel,
                       double temperature);
 
 
-#endif // _ORIENTATION_H_
+#endif // _AHRS_H_
