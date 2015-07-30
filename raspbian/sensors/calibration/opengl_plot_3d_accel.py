@@ -11,7 +11,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.opengl as gl
 
 
-def calibrate(x, y, z):
+def calibrate_ellipsoid(x, y, z):
     H = numpy.array([x, y, z, -y**2, -z**2, numpy.ones([len(x), 1])])
     H = numpy.transpose(H)
     w = x**2
@@ -30,7 +30,9 @@ def calibrate(x, y, z):
     SCy = numpy.sqrt(B)
     SCz = numpy.sqrt(C)
 
-    return ([-OSx, -OSy, -OSz], [1/SCx, 1/SCy, 1/SCz])
+    g = 9.80665
+
+    return ([-OSx, -OSy, -OSz], [1/SCx * g, 1/SCy * g, 1/SCz * g])
 
 
 def calibrate_min_max(x, y, z):
@@ -108,7 +110,7 @@ def run():
         ys = numpy.array(d['ys'])
         zs = numpy.array(d['zs'])
 
-        (offsets, scales) = calibrate(xs, ys, zs)
+        (offsets, scales) = calibrate_ellipsoid(xs, ys, zs)
 
         x_offset = offsets[0]
         y_offset = offsets[1]
@@ -150,13 +152,13 @@ def run():
 
     app = QtGui.QApplication([])
     w = gl.GLViewWidget()
-    w.opts['distance'] = 6
+    w.opts['distance'] = 50
     w.show()
     w.setWindowTitle('Sensor Calibration Plot')
     
     g = gl.GLGridItem()
     # WORKAROUND: set scale to workaround setSize problem
-    g.scale(0.2, 0.2, 0.2)
+    g.scale(2, 2, 2)
     w.addItem(g)
 
     sp1 = gl.GLScatterPlotItem(pos=numpy.array(zip(xs, ys, zs)), color=(1,0,0,.5), size=2)

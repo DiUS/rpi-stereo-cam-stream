@@ -32,6 +32,7 @@ struct iio_sensor_info
     char *sensor_name;
     int sampling_frequency;
     int iio_sample_interval_ms;
+    int invert_axes;
     int channel_index_to_axis_map[3];
     const char *sample_out_file;
     struct calibration_data *calibration;
@@ -56,15 +57,9 @@ static char *barometric_path = "/sys/bus/i2c/drivers/bmp085/1-0077/pressure0_inp
 static char *temperature_path = "/sys/bus/i2c/drivers/bmp085/1-0077/temp0_input";
 static struct calibration_data accel_calibration =
 {
-    .x_offset = 0.117675,
-    .y_offset = -0.058835,
-    .z_offset = -0.019610,
-    .x_scale  = -1.003861,
-    .y_scale  = -1.005803,
-    .z_scale  = -0.990476,
-    //.x_scale  = -1.0,
-    //.y_scale  = -1.0,
-    //.z_scale  = -1.0,
+    .x_scale  = 1.0,
+    .y_scale  = 1.0,
+    .z_scale  = 1.0,
 };
 static struct calibration_data magn_calibration =
 {
@@ -83,9 +78,9 @@ static struct calibration_data magn_calibration =
 };
 static struct calibration_data gyro_calibration =
 {
-    .x_scale  = -1.0,
-    .y_scale  = -1.0,
-    .z_scale  = -1.0,
+    .x_scale  = 1.0,
+    .y_scale  = 1.0,
+    .z_scale  = 1.0,
 };
 static struct iio_sensor_info accel =
 {
@@ -94,6 +89,7 @@ static struct iio_sensor_info accel =
     .iio_sample_interval_ms = 40,
     .channel_index_to_axis_map = {'x', 'y', 'z'},
     .calibration = &accel_calibration,
+    .invert_axes = 1,
     .dev_fd = -1,
 };
 static struct iio_sensor_info magn  =
@@ -103,6 +99,7 @@ static struct iio_sensor_info magn  =
     .iio_sample_interval_ms = 33,
     .channel_index_to_axis_map = {'x', 'z', 'y'},
     .calibration = &magn_calibration,
+    .invert_axes = 0,
     .dev_fd = -1,
 };
 static struct iio_sensor_info gyro  =
@@ -112,6 +109,7 @@ static struct iio_sensor_info gyro  =
     .iio_sample_interval_ms = 11,
     .channel_index_to_axis_map = {'x', 'y', 'z'},
     .calibration = &gyro_calibration,
+    .invert_axes = 1,
     .dev_fd = -1,
 };
 static struct iio_trigger_info timer[] =
@@ -125,6 +123,7 @@ static const char *progname = "";
 static const char *calibration_data_file = "/etc/default/rpi-stereo-cam-stream-calib.conf";
 static int calibration_mode = 0;
 static int raw_mode = 0;
+static int apply_calibration_in_capture = 0;
 
 
 #define min(a,b) ( (a < b) ? a : b )
@@ -192,15 +191,15 @@ static void apply_calibration_data(struct iio_channel_info *channels,
             switch (channel_index_to_axis_map[i])
             {
                 case 'x':
-                    channels[i].scale  /= calibration->x_scale;
+                    channels[i].scale  *= calibration->x_scale;
                     channels[i].offset += calibration->x_offset / channels[i].scale;
                     break;
                 case 'y':
-                    channels[i].scale  /= calibration->y_scale;
+                    channels[i].scale  *= calibration->y_scale;
                     channels[i].offset += calibration->y_offset / channels[i].scale;
                     break;
                 case 'z':
-                    channels[i].scale  /= calibration->z_scale;
+                    channels[i].scale  *= calibration->z_scale;
                     channels[i].offset += calibration->z_offset / channels[i].scale;
                     break;
                 default: return;
@@ -253,7 +252,7 @@ static int setup_iio_device(struct iio_sensor_info *info)
         fprintf(stderr, "Problem reading %s scan element information\n", info->sensor_name);
         return ret;
     }
-    if (!calibration_mode)
+    if ((!calibration_mode) || apply_calibration_in_capture)
         apply_calibration_data(info->channels, info->num_channels, info->calibration, info->channel_index_to_axis_map);
 
     info->scan_size = size_from_channelarray(info->channels, info->num_channels);
@@ -498,6 +497,7 @@ static void populate_sensor_axis(char *data,
 		                 struct iio_channel_info *channels,
 		                 int num_channels,
                                  int *channel_index_to_axis_map,
+                                 int invert_axis,
                                  struct sensor_axis_t *axis)
 {
     int k;
@@ -530,7 +530,8 @@ static void populate_sensor_axis(char *data,
             default:
                 break;
         }
-
+        if (invert_axis)
+            *a *= -1;
     }
 }
 
@@ -672,6 +673,7 @@ static void process_samples(void)
                                              sensor->channels,
                                              sensor->num_channels,
                                              sensor->channel_index_to_axis_map,
+                                             sensor->invert_axes,
                                              axis);
                         (*read_idx)++;
                     }
@@ -752,6 +754,7 @@ static int calibrate_sensor(struct iio_sensor_info *sensor)
                                          sensor->channels,
                                          sensor->num_channels,
                                          sensor->channel_index_to_axis_map,
+                                         sensor->invert_axes,
                                          &axis);
                     print_raw_axis(stdout, &axis);
                     fprintf(stdout, "\n");
@@ -781,7 +784,8 @@ void syntax(void)
     fprintf(stderr, " -M <path>     Calibrate magnetometer mode, write samples to <path>\n");
     fprintf(stderr, " -A <path>     Calibrate accelerometer mode, write samples to <path>\n");
     fprintf(stderr, " -G <path>     Calibrate gyroscope mode, write samples to <path>\n");
-    fprintf(stderr, " -c <path>     Calibration data file (default %s)\n", calibration_data_file);
+    fprintf(stderr, " -C            Apply calibration data in calibration mode\n");
+    fprintf(stderr, " -c <path>     Calibration data (default %s)\n", calibration_data_file);
     fprintf(stderr, " -r            Raw data mode\n");
     fprintf(stderr, " -h            display this information\n");
     fprintf(stderr, "\n");
@@ -806,7 +810,7 @@ int main(int argc, char *argv[])
 
     progname = argv[0];
 
-    while ((opt = getopt (argc, argv, "M:A:G:c:rh")) != -1)
+    while ((opt = getopt (argc, argv, "M:A:G:c:Crh")) != -1)
     {
         switch (opt)
         {
@@ -815,6 +819,7 @@ int main(int argc, char *argv[])
             case 'G': gyro.sample_out_file = optarg; if (strlen(gyro.sample_out_file) == 0) syntax(); break;
             case 'c': calibration_data_file = optarg; if (strlen(calibration_data_file) == 0) syntax(); break;
             case 'r': raw_mode = 1; break;
+            case 'C': apply_calibration_in_capture = 1; break;
             case 'h': // fall through
             default:
                 syntax();

@@ -1,13 +1,14 @@
 #!/usr/bin/python
-""" Plots X Y Z """
+""" Plots Radius X Y Z """
 
 import os
 current_dir = os.path.dirname(os.path.realpath(__file__))
 import sys
 import fileinput
+import math
 import numpy
 
-from mpl_toolkits.mplot3d import Axes3D
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 
@@ -63,6 +64,15 @@ def calibrate_min_max(x, y, z):
     return ([x_offset, y_offset, z_offset], [x_scale, y_scale, z_scale])
 
 
+def print_avg_stdev(radius_np_array):
+    # average and stddev
+    mean = numpy.mean(radius_np_array, dtype=numpy.float64)
+    stddev = numpy.std(radius_np_array, dtype=numpy.float64)
+    print '    mean   = %f' % mean
+    print '    stddev = %f' % stddev
+
+
+
 def print_usage(prog_cmd):
     print "Usage: %s [input_file]" % prog_cmd
 
@@ -104,7 +114,6 @@ def run():
 
     # calibration
     for d in datasets:
-        # find min max
         xs = numpy.array(d['xs'])
         ys = numpy.array(d['ys'])
         zs = numpy.array(d['zs'])
@@ -128,6 +137,18 @@ def run():
         d['cxs'] = map(lambda x: (x+x_offset)*x_scale, d['xs'])
         d['cys'] = map(lambda y: (y+y_offset)*y_scale, d['ys'])
         d['czs'] = map(lambda z: (z+z_offset)*z_scale, d['zs'])
+        # Radius
+        d['radius'] = map(lambda (x, y, z): math.sqrt(math.pow(x, 2) + math.pow(y, 2) + math.pow(z, 2)), zip(d['xs'], d['ys'], d['zs']))
+        d['radius_offset'] = map(lambda (x, y, z): math.sqrt(math.pow(x+x_offset, 2) + math.pow(y+y_offset, 2) + math.pow(z+z_offset, 2)), zip(d['xs'], d['ys'], d['zs']))
+        d['radius_scaled'] = map(lambda (x, y, z): math.sqrt(math.pow(x, 2) + math.pow(y, 2) + math.pow(z, 2)), zip(d['cxs'], d['cys'], d['czs']))
+
+        # average and stddev
+        print 'Raw radius:'
+        print_avg_stdev(numpy.array(d['radius']))
+        print 'Offset radius:'
+        print_avg_stdev(numpy.array(d['radius_offset']))
+        print 'Offset & scaled radius:'
+        print_avg_stdev(numpy.array(d['radius_scaled']))
 
         # old calibration routine
         (offsets_mm, scales_mm) = calibrate_min_max(xs, ys, zs)
@@ -147,19 +168,67 @@ def run():
         d['mmcxs'] = map(lambda x: (x+mm_x_offset)*mm_x_scale, d['xs'])
         d['mmcys'] = map(lambda y: (y+mm_y_offset)*mm_y_scale, d['ys'])
         d['mmczs'] = map(lambda z: (z+mm_z_offset)*mm_z_scale, d['zs'])
+        # Radius
+        d['mm_radius_offset'] = map(lambda (x, y, z): math.sqrt(math.pow(x+mm_x_offset, 2) + math.pow(y+mm_y_offset, 2) + math.pow(z+mm_z_offset, 2)), zip(d['xs'], d['ys'], d['zs']))
+        d['mm_radius_scaled'] = map(lambda (x, y, z): math.sqrt(math.pow(x, 2) + math.pow(y, 2) + math.pow(z, 2)), zip(d['mmcxs'], d['mmcys'], d['mmczs']))
+        # average and stddev
+        print 'mm Offset radius:'
+        print_avg_stdev(numpy.array(d['mm_radius_offset']))
+        print 'mm Offset & scaled radius:'
+        print_avg_stdev(numpy.array(d['mm_radius_scaled']))
+
+
+        ##d['nxs'] = map(lambda (x,r): (x+x_offset)/r, zip(d['xs'],d['radius_offset']))
+        ##d['nys'] = map(lambda (y,r): (y+y_offset)/r, zip(d['ys'],d['radius_offset']))
+        ##d['nzs'] = map(lambda (z,r): (z+z_offset)/r, zip(d['zs'],d['radius_offset']))
+        ##d['radius_normalized'] = map(lambda (x, y, z): math.sqrt(math.pow(x+x_offset, 2) + math.pow(y+y_offset, 2) + math.pow(z+z_offset, 2)), zip(d['nxs'], d['nys'], d['nzs']))
+        ## average and stddev
+        #nparr = numpy.array(d['radius'])
+        #d['mean'] = numpy.mean(nparr, dtype=numpy.float64)
+        #d['stddev'] = numpy.std(nparr, dtype=numpy.float64)
+        #print 'mean   = %f' % d['mean']
+        #print 'stddev = %f' % d['stddev']
+        #num_std_dev = 2.0
+        #lower_range = d['mean']-d['stddev']*num_std_dev
+        #upper_range = d['mean']+d['stddev']*num_std_dev
+        #print 'range (%f stdev) = (%f - %f)' % (num_std_dev, lower_range, upper_range)
+        #for idx, r in enumerate(d['radius']):
+        #    if r <= lower_range or r >= upper_range:
+        #        print 'sample %d (%f, %f, %f) radius %f' % (idx+1, d['xs'][idx], d['ys'][idx], d['zs'][idx], r)
 
 
     fig = plt.figure()
     
     # plot
-    ax = fig.add_subplot(1, 1, 1, projection='3d')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
+    ax = fig.add_subplot(1, 1, 1)
+    ax.xaxis.grid(True, which='both')
+    ax.yaxis.grid(True)
+    ax.minorticks_on()
+    ax.set_title('Radius')
+    ax.set_ylabel('radius')
+    plegend = []
+    slegend = []
     for d in datasets:
-        ax.scatter(d['xs'], d['ys'], d['zs'], c='b')
-        ax.scatter(d['cxs'], d['cys'], d['czs'], c='r')
-        ax.scatter(d['mmcxs'], d['mmcys'], d['mmczs'], c='g')
+        ptmp, = ax.plot(d['radius'])
+        plegend.append(ptmp)
+        slegend.append(d['name'] + ' raw')
+
+        ptmp, = ax.plot(d['mm_radius_offset'])
+        plegend.append(ptmp)
+        slegend.append(d['name'] + ' offset (minmax)')
+        ptmp, = ax.plot(d['mm_radius_scaled'])
+        plegend.append(ptmp)
+        slegend.append(d['name'] + ' scaled (minmax)')
+
+        ptmp, = ax.plot(d['radius_offset'])
+        plegend.append(ptmp)
+        slegend.append(d['name'] + ' offset')
+        ptmp, = ax.plot(d['radius_scaled'])
+        plegend.append(ptmp)
+        slegend.append(d['name'] + ' scaled')
+
+    ax.legend(plegend, slegend)
+
     plt.show()
 
 

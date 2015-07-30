@@ -7,9 +7,8 @@ import sys
 import fileinput
 import numpy
 
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-
+from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph.opengl as gl
 
 
 def calibrate_ellipsoid(x, y, z):
@@ -149,20 +148,33 @@ def run():
         d['mmczs'] = map(lambda z: (z+mm_z_offset)*mm_z_scale, d['zs'])
 
 
-    fig = plt.figure()
+    app = QtGui.QApplication([])
+    w = gl.GLViewWidget()
+    w.opts['distance'] = 6
+    w.show()
+    w.setWindowTitle('Sensor Calibration Plot')
     
-    # plot
-    ax = fig.add_subplot(1, 1, 1, projection='3d')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    for d in datasets:
-        ax.scatter(d['xs'], d['ys'], d['zs'], c='b')
-        ax.scatter(d['cxs'], d['cys'], d['czs'], c='r')
-        ax.scatter(d['mmcxs'], d['mmcys'], d['mmczs'], c='g')
-    plt.show()
+    g = gl.GLGridItem()
+    # WORKAROUND: set scale to workaround setSize problem
+    g.scale(0.2, 0.2, 0.2)
+    w.addItem(g)
 
+    sp1 = gl.GLScatterPlotItem(pos=numpy.array(zip(xs, ys, zs)), color=(1,0,0,.5), size=2)
+    w.addItem(sp1)
 
+    cxs = numpy.array(d['cxs'])
+    cys = numpy.array(d['cys'])
+    czs = numpy.array(d['czs'])
+    sp2 = gl.GLScatterPlotItem(pos=numpy.array(zip(cxs, cys, czs)), color=(0,1,0,.5), size=2)
+    w.addItem(sp2)
+
+    mmcxs = numpy.array(d['mmcxs'])
+    mmcys = numpy.array(d['mmcys'])
+    mmczs = numpy.array(d['mmczs'])
+    sp3 = gl.GLScatterPlotItem(pos=numpy.array(zip(mmcxs, mmcys, mmczs)), color=(0,0,1,.5), size=2)
+    w.addItem(sp3)
+
+    QtGui.QApplication.instance().exec_()
 
 
 
