@@ -150,11 +150,13 @@ def run():
 
     app = QtGui.QApplication([])
     w = gl.GLViewWidget()
-    w.opts['distance'] = 10
+    w.opts['distance'] = 6
     w.show()
     w.setWindowTitle('Sensor Calibration Plot')
     
     g = gl.GLGridItem()
+    # WORKAROUND: set scale to workaround setSize problem
+    g.scale(0.2, 0.2, 0.2)
     w.addItem(g)
 
     sp1 = gl.GLScatterPlotItem(pos=numpy.array(zip(xs, ys, zs)), color=(1,0,0,.5), size=2)
