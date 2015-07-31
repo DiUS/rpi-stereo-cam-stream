@@ -3,7 +3,7 @@
 #include <math.h>
 #include "ahrs.h"
 
-// restrict roll to ±90deg to avoid gimbal lock
+// restrict roll to ±90deg
 //#define RESTRICT_PITCH
 
 static inline double to_degrees(double radians)
@@ -68,7 +68,7 @@ static void get_pitch_roll(struct sensor_axis_t *accel, double *roll, double *pi
 //    *pitch = to_degrees(atan2(accel->x, accel->z));
 //#endif
     *roll = to_degrees(atan(accel->y / sqrt(accel->x * accel->x + accel->z * accel->z)));
-    *pitch = to_degrees(atan(-accel->x / sqrt(accel->y * accel->y + accel->z * accel->z)));
+    *pitch = to_degrees(atan(accel->x / sqrt(accel->y * accel->y + accel->z * accel->z)));
 }
 
 
@@ -123,8 +123,8 @@ static double heading(struct sensor_axis_t *magn,
     vector_normalize(&N);
 
     // compute heading
-    double heading = atan2(vector_dot(&E, from), vector_dot(&N, from)) * 180 / M_PI;
-    return heading;
+    double heading = to_degrees(atan2(vector_dot(&E, from), vector_dot(&N, from)));
+    return -heading;
 }
 
 
@@ -136,9 +136,11 @@ static double heading(struct sensor_axis_t *magn,
 void orientation_show(struct sensor_axis_t *accel,
                       struct sensor_axis_t *gyro,
                       struct sensor_axis_t *magn,
+                      double magnetic_declination_mrad,
                       int pressure,
                       double temperature)
 {
+    double magnetic_declination_degrees = to_degrees(magnetic_declination_mrad/1000);
     double roll;
     double pitch;
     //double yaw_raw;
@@ -147,30 +149,31 @@ void orientation_show(struct sensor_axis_t *accel,
 
     get_pitch_roll(accel, &roll, &pitch);
 
+    //struct sensor_axis_t from = {-1,0,0};
     struct sensor_axis_t from = {1,0,0};
-    yaw = heading(magn, accel, &from);
+    yaw = heading(magn, accel, &from) + magnetic_declination_degrees;
+    if (yaw < 0.0)
+        yaw += 360.0;
 
     //get_yaw(magn, roll, pitch, &yaw_raw);
 
 
 
-    //double rollRadians = to_radians(roll);
-    //double pitchRadians = to_radians(pitch);
-    //
-    //double cosRoll = (float)cos(rollRadians);
-    //double sinRoll = (float)sin(rollRadians);
-    //double cosPitch = (float)cos(-1*pitchRadians);
-    //double sinPitch = (float)sin(-1*pitchRadians);
-    //
-    ///* The tilt compensation algorithm                            */
-    ///* Xh = X.cosPitch + Z.sinPitch                               */
-    ///* Yh = X.sinRoll.sinPitch + Y.cosRoll - Z.sinRoll.cosPitch   */
-    //magn->x = magn->x * cosPitch + magn->z * sinPitch;
-    //magn->y = magn->x * sinRoll * sinPitch + magn->y * cosRoll - magn->z * sinRoll * cosPitch;
-
-
-
-    //get_yaw(magn, roll, pitch, &yaw);
+    // Euler method heading
+    double rollRadians = to_radians(roll);
+    double pitchRadians = to_radians(pitch);
+    double cosRoll = (float)cos((-1)*rollRadians);
+    double sinRoll = (float)sin((-1)*rollRadians);
+    double cosPitch = (float)cos(pitchRadians);
+    double sinPitch = (float)sin(pitchRadians);
+    /* The tilt compensation algorithm                            */
+    /* Xh = X.cosPitch + Z.sinPitch                               */
+    /* Yh = X.sinRoll.sinPitch + Y.cosRoll - Z.sinRoll.cosPitch   */
+    double Xh = magn->x * cosPitch + magn->z * sinPitch;
+    double Yh = magn->x * sinRoll * sinPitch + magn->y * cosRoll - magn->z * sinRoll * cosPitch;
+    double euler_yaw = to_degrees(atan2(Yh, Xh)) + magnetic_declination_degrees;
+    if (euler_yaw < 0.0)
+        euler_yaw += 360.0;
 
 
 
@@ -180,6 +183,7 @@ void orientation_show(struct sensor_axis_t *accel,
     {
         print_rate_divider = 0;
         fprintf(stdout, "% 7.2f % 7.2f % 7.2f ", roll, pitch, yaw);
+        fprintf(stdout, "% 7.2f ", euler_yaw);
         fprintf(stdout, "%8d %6.1f", pressure, temperature);
         fprintf(stdout, "\n");
     }

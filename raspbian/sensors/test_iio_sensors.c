@@ -32,8 +32,8 @@ struct iio_sensor_info
     char *sensor_name;
     int sampling_frequency;
     int iio_sample_interval_ms;
-    int invert_axes;
-    int channel_index_to_axis_map[3];
+    char channel_index_to_axis_map[3];
+    int invert_axes[3]; // x, y, z
     const char *sample_out_file;
     struct calibration_data *calibration;
     struct iio_channel_info *channels;
@@ -51,30 +51,29 @@ struct iio_sensor_info
 
 
 #define BUFFER_LENGTH           128
+#define MAX_PRINT_RATE_HZ       25
 
 
 static char *barometric_path = "/sys/bus/i2c/drivers/bmp085/1-0077/pressure0_input";
 static char *temperature_path = "/sys/bus/i2c/drivers/bmp085/1-0077/temp0_input";
+static double magnetic_declination_mrad = 0;
 static struct calibration_data accel_calibration =
 {
-    .x_scale  = 1.0,
-    .y_scale  = 1.0,
-    .z_scale  = 1.0,
+    .x_offset = 0.263798,
+    .y_offset = -0.053282,
+    .z_offset = 0.103909,
+    .x_scale  = 0.992941,
+    .y_scale  = 0.995991,
+    .z_scale  = 0.993166,
 };
 static struct calibration_data magn_calibration =
 {
-    .x_offset = 0.018630,
-    .y_offset = 0.108630,
-    .z_offset = 0.333150,
-    .x_scale  = 1.005036,
-    .y_scale  = 0.898288,
-    .z_scale  = 1.121350,
-    //.x_offset = 0.028175,
-    //.y_offset = 0.073950,
-    //.z_offset = 0.333145,
-    //.x_scale  = 0.972343,
-    //.y_scale  = 0.949530,
-    //.z_scale  = 1.088845,
+    .x_offset = -0.017075,
+    .y_offset = -0.114040,
+    .z_offset = 0.337632,
+    .x_scale  = 1.610894,
+    .y_scale  = 1.400538,
+    .z_scale  = 1.763195,
 };
 static struct calibration_data gyro_calibration =
 {
@@ -89,7 +88,7 @@ static struct iio_sensor_info accel =
     .iio_sample_interval_ms = 40,
     .channel_index_to_axis_map = {'x', 'y', 'z'},
     .calibration = &accel_calibration,
-    .invert_axes = 1,
+    .invert_axes = {0, 0, 1},
     .dev_fd = -1,
 };
 static struct iio_sensor_info magn  =
@@ -99,7 +98,7 @@ static struct iio_sensor_info magn  =
     .iio_sample_interval_ms = 33,
     .channel_index_to_axis_map = {'x', 'z', 'y'},
     .calibration = &magn_calibration,
-    .invert_axes = 0,
+    .invert_axes = {0, 0, 1},
     .dev_fd = -1,
 };
 static struct iio_sensor_info gyro  =
@@ -109,7 +108,7 @@ static struct iio_sensor_info gyro  =
     .iio_sample_interval_ms = 11,
     .channel_index_to_axis_map = {'x', 'y', 'z'},
     .calibration = &gyro_calibration,
-    .invert_axes = 1,
+    .invert_axes = {1, 1, 1},
     .dev_fd = -1,
 };
 static struct iio_trigger_info timer[] =
@@ -180,7 +179,7 @@ error_ret:
 static void apply_calibration_data(struct iio_channel_info *channels,
                                    int num_channels,
                                    struct calibration_data *calibration,
-                                   int *channel_index_to_axis_map)
+                                   char *channel_index_to_axis_map)
 {
     if ((calibration) && (num_channels == 3))
     {
@@ -362,6 +361,8 @@ static int start_iio_device(struct iio_sensor_info *info)
 
 static int stop_iio_device(struct iio_sensor_info *info)
 {
+    if (calibration_mode && (info->sample_out_file == NULL))
+        return 0;
     return write_sysfs_int("enable", info->buf_dir_name, 0);
 }
 
@@ -496,8 +497,8 @@ static double double8byte(uint64_t input, struct iio_channel_info *info)
 static void populate_sensor_axis(char *data,
 		                 struct iio_channel_info *channels,
 		                 int num_channels,
-                                 int *channel_index_to_axis_map,
-                                 int invert_axis,
+                                 char *channel_index_to_axis_map,
+                                 int *invert_axis,
                                  struct sensor_axis_t *axis)
 {
     int k;
@@ -506,11 +507,12 @@ static void populate_sensor_axis(char *data,
     for (k = 0; k < num_channels; k++)
     {
         double *a;
+        int invert = 0;
         switch (channel_index_to_axis_map[k])
         {
-            case 'x': a = &axis->x; break;
-            case 'y': a = &axis->y; break;
-            case 'z': a = &axis->z; break;
+            case 'x': a = &axis->x; invert = invert_axis[0]; break;
+            case 'y': a = &axis->y; invert = invert_axis[1]; break;
+            case 'z': a = &axis->z; invert = invert_axis[2]; break;
             default: a = NULL;
         }
         if (a == NULL)
@@ -530,8 +532,8 @@ static void populate_sensor_axis(char *data,
             default:
                 break;
         }
-        if (invert_axis)
-            *a *= -1;
+        if (invert)
+            *a *= (-1);
     }
 }
 
@@ -695,7 +697,7 @@ static void process_samples(void)
                 }
             }
             else
-                orientation_show(&accel_axis, &gyro_axis, &magn_axis, pressure, ((double)raw_temperature)/10);
+                orientation_show(&accel_axis, &gyro_axis, &magn_axis, magnetic_declination_mrad, pressure, ((double)raw_temperature)/10);
         }
     }
 }
@@ -705,6 +707,11 @@ static int calibrate_sensor(struct iio_sensor_info *sensor)
 {
     if (sensor->sample_out_file == NULL)
         return 0;
+
+    int print_rate_divider = 1;
+    int print_rate_counter = 0;
+    while (sensor->iio_sample_interval_ms * print_rate_divider < 1000 / MAX_PRINT_RATE_HZ)
+        print_rate_divider++;
 
     int ret = 0;
     int num_lines = 0;
@@ -745,11 +752,10 @@ static int calibrate_sensor(struct iio_sensor_info *sensor)
             int j;
             for (j = 0; j < num_rows; j++)
             {
-                static int print_rate_divider = 0;
-                print_rate_divider++;
-                if (print_rate_divider >= 2)
+                print_rate_counter++;
+                if (print_rate_counter >= print_rate_divider)
                 {
-                    print_rate_divider = 0;
+                    print_rate_counter = 0;
                     populate_sensor_axis(sensor->data + sensor->scan_size * j,
                                          sensor->channels,
                                          sensor->num_channels,
@@ -828,7 +834,8 @@ int main(int argc, char *argv[])
     }
 
     if (read_calibration_from_file(calibration_data_file, &accel_calibration,
-                                   &magn_calibration, &gyro_calibration))
+                                   &magn_calibration, &gyro_calibration,
+                                   &magnetic_declination_mrad))
         fprintf(stderr, "Warning: no calibration data available\n");
 
     if ((accel.sample_out_file != NULL) ||
@@ -881,6 +888,7 @@ int main(int argc, char *argv[])
     {
         if (!terminated)
         {
+            fprintf(stdout, "\n");
             fprintf(stdout, "***********************************************\n");
             fprintf(stdout, "          M A G N E T O M E T E R\n");
             fprintf(stdout, "***********************************************\n");
@@ -889,6 +897,7 @@ int main(int argc, char *argv[])
         }
         if (!terminated)
         {
+            fprintf(stdout, "\n");
             fprintf(stdout, "***********************************************\n");
             fprintf(stdout, "         A C C E L E R O M E T E R\n");
             fprintf(stdout, "***********************************************\n");
@@ -897,6 +906,7 @@ int main(int argc, char *argv[])
         }
         if (!terminated)
         {
+            fprintf(stdout, "\n");
             fprintf(stdout, "***********************************************\n");
             fprintf(stdout, "             G Y R O S C O P E\n");
             fprintf(stdout, "***********************************************\n");

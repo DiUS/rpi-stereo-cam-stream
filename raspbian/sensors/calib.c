@@ -26,7 +26,8 @@ static void consume_white_space(char **str)
 static void process_key_value(const char *key, const char *value,
                               struct calibration_data *accel,
                               struct calibration_data *magn,
-                              struct calibration_data *gyro)
+                              struct calibration_data *gyro,
+                              double *magnetic_declination_mrad)
 {
     double v;
     errno = 0;
@@ -44,6 +45,8 @@ static void process_key_value(const char *key, const char *value,
     };
     struct kv_map map[] =
     {
+        {"magn.declination_mrad", magnetic_declination_mrad},
+
         {"magn.x_offset",  &magn->x_offset },
         {"magn.y_offset",  &magn->y_offset },
         {"magn.z_offset",  &magn->z_offset },
@@ -82,7 +85,8 @@ static void process_key_value(const char *key, const char *value,
 int read_calibration_from_file(const char *calibration_file,
                                struct calibration_data *accel,
                                struct calibration_data *magn,
-                               struct calibration_data *gyro)
+                               struct calibration_data *gyro,
+                               double *magnetic_declination_mrad)
 {
 #define STR_BUFFER_SIZE 128
     int ret = 0;
@@ -124,7 +128,7 @@ int read_calibration_from_file(const char *calibration_file,
                 *equal = 0;
 
                 consume_white_space(&key);
-                process_key_value(key, value, accel, magn, gyro);
+                process_key_value(key, value, accel, magn, gyro, magnetic_declination_mrad);
             }
         }
     }
@@ -132,4 +136,3 @@ int read_calibration_from_file(const char *calibration_file,
     fclose(stream);
     return ret;
 }
-

@@ -13,6 +13,7 @@ struct sensor_axis_t
 void orientation_show(struct sensor_axis_t *accel,
                       struct sensor_axis_t *gyro,
                       struct sensor_axis_t *magn,
+                      double magnetic_declination_mrad,
                       int pressure,
                       double temperature);
 

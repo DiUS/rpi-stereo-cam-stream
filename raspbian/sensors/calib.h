@@ -16,7 +16,8 @@ struct calibration_data
 int read_calibration_from_file(const char *calibration_file,
                                struct calibration_data *accel,
                                struct calibration_data *magn,
-                               struct calibration_data *gyro);
+                               struct calibration_data *gyro,
+                               double *magnetic_declination_mrad);
 
 
 #endif // _CALIB_H_
