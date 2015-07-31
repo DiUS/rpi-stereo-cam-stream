@@ -149,13 +149,11 @@ void orientation_show(struct sensor_axis_t *accel,
 
     get_pitch_roll(accel, &roll, &pitch);
 
-    //struct sensor_axis_t from = {-1,0,0};
-    struct sensor_axis_t from = {1,0,0};
-    yaw = heading(magn, accel, &from) + magnetic_declination_degrees;
-    if (yaw < 0.0)
-        yaw += 360.0;
+    //struct sensor_axis_t from = {1,0,0};
+    //yaw = heading(magn, accel, &from) + magnetic_declination_degrees;
+    //if (yaw < 0.0)
+    //    yaw += 360.0;
 
-    //get_yaw(magn, roll, pitch, &yaw_raw);
 
 
 
@@ -171,9 +169,9 @@ void orientation_show(struct sensor_axis_t *accel,
     /* Yh = X.sinRoll.sinPitch + Y.cosRoll - Z.sinRoll.cosPitch   */
     double Xh = magn->x * cosPitch + magn->z * sinPitch;
     double Yh = magn->x * sinRoll * sinPitch + magn->y * cosRoll - magn->z * sinRoll * cosPitch;
-    double euler_yaw = to_degrees(atan2(Yh, Xh)) + magnetic_declination_degrees;
-    if (euler_yaw < 0.0)
-        euler_yaw += 360.0;
+    yaw = to_degrees(atan2(Yh, Xh)) + magnetic_declination_degrees;
+    if (yaw < 0.0)
+        yaw += 360.0;
 
 
 
@@ -183,7 +181,6 @@ void orientation_show(struct sensor_axis_t *accel,
     {
         print_rate_divider = 0;
         fprintf(stdout, "% 7.2f % 7.2f % 7.2f ", roll, pitch, yaw);
-        fprintf(stdout, "% 7.2f ", euler_yaw);
         fprintf(stdout, "%8d %6.1f", pressure, temperature);
         fprintf(stdout, "\n");
     }
